@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { db } from "../db";
 import { compartilhamentos, playlistMusicas, musicas, usuarios } from "../db/schema";
@@ -244,9 +244,10 @@ recursos.get("/", authMiddleware, exigePermissao("ler:musica"), async (c) => {
       .orderBy(desc(musicas.criadoEm));
   } else {
     const ids = await idsCompartilhadosCom(usuarioId);
-    linhas = ids.length
-      ? await db.select().from(musicas).where(inArray(musicas.id, ids)).orderBy(desc(musicas.criadoEm))
-      : [];
+    const filtro = ids.length
+      ? or(eq(musicas.usuarioId, usuarioId), inArray(musicas.id, ids))
+      : eq(musicas.usuarioId, usuarioId);
+    linhas = await db.select().from(musicas).where(filtro).orderBy(desc(musicas.criadoEm));
   }
 
   return c.json({ musicas: linhas.map((l) => resumo(l)), total: linhas.length });
