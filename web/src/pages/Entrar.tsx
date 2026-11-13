@@ -1,10 +1,11 @@
 import * as React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, Eye, EyeOff, ShieldCheck, ListMusic, Headphones } from "lucide-react";
 import { LogoMark } from "../components/LogoMark";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../components/ui/toast";
 import { Button } from "../components/ui/button";
+import { Spinner } from "../components/ui/spinner";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
@@ -23,11 +24,20 @@ export function Entrar({ modoInicial = "login" }: { modoInicial?: "login" | "cad
   const [enviando, setEnviando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
 
-  const { entrar, cadastrar } = useAuth();
+  const { entrar, cadastrar, usuario, carregando } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const destino = (location.state as { de?: string } | null)?.de ?? "/painel/biblioteca";
+
+  if (carregando) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+  if (usuario) return <Navigate to={destino} replace />;
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();

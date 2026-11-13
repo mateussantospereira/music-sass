@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   ArrowRight, Sparkles, ListMusic, MousePointerClick, ShieldCheck, Headphones,
   Music2, Library, Users, Check, ChevronRight,
@@ -6,6 +6,8 @@ import {
 import { Logo, LogoMark } from "../components/LogoMark";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
+import { Spinner } from "../components/ui/spinner";
+import { useAuth } from "../lib/auth";
 
 const RECURSOS = [
   { icone: MousePointerClick, titulo: "Cole o link, a gente extrai", texto: "URL do YouTube no formulário e o Riff processa o áudio no servidor. Em minutos a faixa está pronta na sua biblioteca." },
@@ -29,6 +31,18 @@ const FAQ = [
 ];
 
 export function Landing() {
+  const { usuario, carregando } = useAuth();
+
+  // Quem já está logado cai direto na biblioteca ao abrir o site.
+  if (carregando) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner className="h-8 w-8" />
+      </div>
+    );
+  }
+  if (usuario) return <Navigate to="/painel/biblioteca" replace />;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ------------------------------ Nav ------------------------------ */}
