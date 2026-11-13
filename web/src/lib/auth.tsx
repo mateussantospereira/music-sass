@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCarregando(false);
       return;
     }
-    const { ok, data } = await api<Usuario>("/api/auth/me");
+    const { ok, data } = await api<Usuario>("/api/me");
     setUsuario(ok && data ? data : null);
     if (!ok) removerToken();
     setCarregando(false);
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [recarregar]);
 
   const entrar = React.useCallback(async (email: string, senha: string) => {
-    const { ok, data } = await api<{ token: string; nome: string; role: Papel }>("/api/auth/login", {
+    const { ok, data } = await api<{ token: string; nome: string; role: Papel }>("/api/login", {
       body: { email, senha },
     });
     if (!ok || !data?.token) {
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const cadastrar = React.useCallback(
     async (nome: string, email: string, senha: string) => {
-      const registro = await api<{ message?: string }>("/api/auth/register", { body: { nome, email, senha } });
+      const registro = await api<{ message?: string }>("/api/register", { body: { nome, email, senha } });
       if (!registro.ok) {
         return { ok: false, erro: (registro.data as { error?: string } | null)?.error ?? "Não foi possível criar a conta." };
       }
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const sair = React.useCallback(async () => {
-    await api("/api/auth/logout", { method: "POST", body: {} }).catch(() => {});
+    await api("/api/logout", { method: "POST", body: {} }).catch(() => {});
     removerToken();
     setUsuario(null);
   }, []);

@@ -17,7 +17,7 @@ export function RecuperarSenha() {
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setEnviando(true);
-    const { ok, data } = await api<{ error?: string }>("/api/auth/forgot-password", { body: { email } });
+    const { ok, data } = await api<{ error?: string }>("/api/forgot-password", { body: { email } });
     setEnviando(false);
     if (!ok) {
       toast("error", data?.error ?? "Não foi possível enviar o e-mail.");
@@ -73,7 +73,7 @@ export function ResetPassword() {
     if (novaSenha.length < 8) return setErro("A senha deve ter ao menos 8 caracteres.");
     if (novaSenha !== confirmar) return setErro("As senhas não coincidem.");
     setEnviando(true);
-    const { ok, data } = await api<{ error?: string }>("/api/auth/reset-password", { body: { token, novaSenha } });
+    const { ok, data } = await api<{ error?: string }>("/api/reset-password", { body: { token, novaSenha } });
     setEnviando(false);
     if (!ok) return setErro(data?.error ?? "Link inválido ou expirado.");
     toast("ok", "Senha redefinida. Entre com a nova senha.");
