@@ -1,0 +1,117 @@
+import { Hono } from "hono";
+import authRoutes from "./routes/auth";
+import passwordRoutes from "./routes/password";
+import usuariosRoutes from "./routes/usuarios";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
+import { config } from "./config";
+import {
+  avisoSchemaPendente,
+  schemaEstaCompleto,
+  verificarSchema,
+  type Pendencia,
+} from "./services/schema-check";
+
+/**
+ * auth-service — microsservico de autenticacao do Riff.
+ *
+ * Ele mora num container proprio e NAO tem porta publicada no docker-compose.yml:
+ * a unica forma de alcancar este servico e de dentro da rede do Docker, pelo
+ * nome `auth-service`. Quem entra pela internet (o navegador) fala com o
+ * app, e o app repassa a chamada para ca.
+ *
+ * Responsabilidades (todas aqui, e so aqui):
+ *   - cadastro e login
+ *   - papeis de usuario (role), o mapa de PERMISSOES de cada papel
+ *     (src/auth/permissoes.ts) e o endpoint que responde "quem e esse usuario?"
+ *   - administracao de usuarios (atividade 4): listar e promover/rebaixar,
+ *     com enforcement de permissao no proprio servico
+ *   - geracao, envio e validacao do link de recuperacao de senha
+ */
+
+const app = new Hono();
+
+import { registrar, ipDe } from "./services/log-service";
+
+/** Estado do schema, conferido uma vez no boot (e atualizado no /health). */
+let pendencia: Pendencia | null = null;
+
+/** Usado pelo healthcheck do container e para conferir o servico de fora. */
+app.get("/health", async (c) => {
+  try {
+    pendencia = await verificarSchema();
+  } catch {
+    pendencia = null;
+  }
+
+  if (!pendencia) {
+    return c.json({ status: "erro", servico: "auth-service", banco: "inacessivel" }, 503);
+  }
+
+  if (!schemaEstaCompleto(pendencia)) {
+    return c.json(
+      { status: "erro", servico: "auth-service", schema: "pendente", ...pendencia },
+      503
+    );
+  }
+
+  return c.json({ status: "ok", servico: "auth-service" });
+});
+
+// Atividade 5 — auditoria de ações negadas (HTTP 403) no auth-service
+app.use("*", async (c, next) => {
+  await next();
+  if (c.res.status === 403) {
+    try {
+      const corpo = (await c.res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+      const permissaoExigida = typeof corpo?.permissao_exigida === "string" ? corpo.permissao_exigida : null;
+      const detalheErro = typeof corpo?.error === "string" ? corpo.error : "Ação negada";
+
+      await registrar({
+        acao: "acao_negada",
+        usuario_id: (c.get as any)("usuarioId") ?? null,
+        usuario: (c.get as any)("nome") ?? null,
+        papel: (c.get as any)("role") ?? null,
+        recurso: permissaoExigida ? `${c.req.method} ${c.req.path} (${permissaoExigida})` : `${c.req.method} ${c.req.path}`,
+        detalhe: detalheErro,
+        ip: ipDe(c),
+      });
+    } catch {}
+  }
+});
+
+app.route("/", authRoutes);
+app.route("/", passwordRoutes);
+app.route("/", usuariosRoutes);
+
+app.notFound((c) => c.json({ error: "Rota não encontrada no auth-service" }, 404));
+
+// Handler de erro unico: uma excecao nao pode estourar um HTML de stack trace
+// para o app. O app precisa de JSON para poder repassar a resposta.
+app.onError((erro, c) => {
+  console.error("[auth-service] erro nao tratado:", erro);
+  return c.json({ error: "Erro interno no serviço de autenticação" }, 500);
+});
+
+try {
+  pendencia = await verificarSchema();
+} catch (erro) {
+  console.error("[auth-service] nao consegui falar com o banco no boot:", erro);
+  console.error(avisoSchemaPendente({ temColunaRole: false, temTabelaResetTokens: false, temColunaPremium: false }));
+}
+
+if (pendencia && !schemaEstaCompleto(pendencia)) {
+  console.error(avisoSchemaPendente(pendencia));
+}
+
+console.log(
+  `[auth-service] ouvindo na porta ${config.port} (container) — ` +
+    `link de recuperacao aponta para ${config.app.publicUrl}${config.reset.path} — ` +
+    `reset expira em ${config.reset.ttlMinutos} min — ` +
+    `e-mail via ${config.mail.host || "SMTP nao configurado (modo log)"}`
+);
+
+export default {
+  port: config.port,
+  fetch: app.fetch,
+};

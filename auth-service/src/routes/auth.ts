@@ -1,0 +1,209 @@
+import { Hono } from "hono";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { usuarios } from "../db/schema";
+import { config } from "../config";
+import { permissoesDe } from "../auth/permissoes";
+import { registrar, ipDe } from "../services/log-service";
+
+/**
+ * Rotas de autenticacao. Este arquivo existe SO dentro do auth-service —
+ * no app da atividade 3 nao ha mais nem uma linha de login/senha/role.
+ */
+
+const auth = new Hono();
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const TAMANHO_MINIMO_SENHA = 6;
+
+auth.post("/register", async (c) => {
+  const { nome, email, senha } = await c.req.json().catch(() => ({}));
+
+  if (!nome || !email || !senha) {
+    return c.json({ error: "Nome, email e senha são obrigatórios" }, 400);
+  }
+
+  if (!EMAIL_VALIDO.test(String(email))) {
+    return c.json({ error: "Email inválido" }, 400);
+  }
+
+  if (String(senha).length < TAMANHO_MINIMO_SENHA) {
+    return c.json({ error: `A senha deve ter no mínimo ${TAMANHO_MINIMO_SENHA} caracteres` }, 400);
+  }
+
+  const existing = await db
+    .select()
+    .from(usuarios)
+    .where(eq(usuarios.email, String(email).toLowerCase()))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return c.json({ error: "Email já cadastrado" }, 409);
+  }
+
+  // `role` nao vem do corpo da requisicao de proposito: um usuario nao
+  // escolhe o proprio papel. Todo cadastro nasce como "curador" (quem
+  // cria a biblioteca); virar "ouvinte" ou "admin" e uma decisao administrativa,
+  // feita pelo admin/seed.
+  const senhaHash = await bcrypt.hash(String(senha), 10);
+  await db.insert(usuarios).values({
+    nome: String(nome),
+    email: String(email).toLowerCase(),
+    senhaHash,
+    role: "curador",
+  });
+
+  return c.json({ message: "Conta criada com sucesso" }, 201);
+});
+
+auth.post("/login", async (c) => {
+  const { email, senha } = await c.req.json().catch(() => ({}));
+
+  if (!email || !senha) {
+    return c.json({ error: "Email e senha são obrigatórios" }, 400);
+  }
+
+  const rows = await db
+    .select()
+    .from(usuarios)
+    .where(eq(usuarios.email, String(email).toLowerCase()))
+    .limit(1);
+
+  // Mensagem unica para "e-mail nao existe" e "senha errada": nao entregamos a
+  // um invasor a informacao de quais e-mails tem conta no sistema.
+  if (rows.length === 0) {
+    await registrar({
+      acao: "login_falhou",
+      usuario_id: null,
+      usuario: null,
+      papel: null,
+      recurso: "sessao",
+      detalhe: `email:${email}`,
+      ip: ipDe(c),
+    });
+    return c.json({ error: "Credenciais inválidas" }, 401);
+  }
+
+  const user = rows[0];
+  const valid = await bcrypt.compare(String(senha), user.senhaHash);
+  if (!valid) {
+    await registrar({
+      acao: "login_falhou",
+      usuario_id: user.id,
+      usuario: user.nome,
+      papel: user.role,
+      recurso: "sessao",
+      detalhe: `email:${email}`,
+      ip: ipDe(c),
+    });
+    return c.json({ error: "Credenciais inválidas" }, 401);
+  }
+
+  const token = jwt.sign(
+    { sub: String(user.id), nome: user.nome, role: user.role },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn as jwt.SignOptions["expiresIn"] }
+  );
+
+  await registrar({
+    acao: "login",
+    usuario_id: user.id,
+    usuario: user.nome,
+    papel: user.role,
+    recurso: "sessao",
+    ip: ipDe(c),
+  });
+
+  return c.json({ token, nome: user.nome, role: user.role });
+});
+
+auth.post("/logout", async (c) => {
+  const header = c.req.header("Authorization");
+  let usuarioId: number | null = null;
+  let nome: string | null = null;
+  let papel: string | null = null;
+
+  if (header?.startsWith("Bearer ")) {
+    try {
+      const payload = jwt.verify(header.slice(7), config.jwt.secret) as { sub?: string; nome?: string; role?: string };
+      usuarioId = Number(payload.sub) || null;
+      nome = payload.nome ?? null;
+      papel = payload.role ?? null;
+    } catch {}
+  }
+
+  await registrar({
+    acao: "logout",
+    usuario_id: usuarioId,
+    usuario: nome,
+    papel,
+    recurso: "sessao",
+    ip: ipDe(c),
+  });
+
+  return c.json({ message: "Sessão encerrada" });
+});
+
+/**
+ * Requisito 3 — "qual o papel desse usuario?".
+ *
+ * E o endpoint que o app chama toda vez que precisa de uma decisao de
+ * autorizacao. Ele NAO existe publicamente: so e alcancavel de dentro da rede
+ * do Docker, pelo nome do servico. O app manda o token do usuario e recebe
+ * o perfil; ele nao decodifica nem assina nada.
+ */
+auth.get("/me", async (c) => {
+  const header = c.req.header("Authorization");
+  if (!header?.startsWith("Bearer ")) {
+    return c.json({ error: "Token ausente" }, 401);
+  }
+
+  let payload: { sub?: string };
+  try {
+    payload = jwt.verify(header.slice(7), config.jwt.secret) as { sub?: string };
+  } catch {
+    return c.json({ error: "Token inválido ou expirado" }, 401);
+  }
+
+  const usuarioId = Number(payload.sub);
+  if (!Number.isInteger(usuarioId)) {
+    return c.json({ error: "Token inválido" }, 401);
+  }
+
+  // O papel e lido do banco, e nao do token: se o admin rebaixar um usuario,
+  // a mudanca vale na proxima requisicao, sem esperar o token expirar.
+  const rows = await db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      role: usuarios.role,
+      premium: usuarios.premium,
+    })
+    .from(usuarios)
+    .where(eq(usuarios.id, usuarioId))
+    .limit(1);
+
+  if (rows.length === 0) {
+    return c.json({ error: "Token inválido" }, 401);
+  }
+
+  const { id, nome, email, role, premium } = rows[0];
+
+  /**
+   * Atividade 4: o `/me` deixou de responder so "quem e voce" e passa a
+   * responder tambem "o que voce pode fazer".
+   *
+   * `permissoes` vem do mapa do auth-service (src/auth/permissoes.ts), que e o
+   * unico lugar onde papel -> permissao e definido. O app recebe a lista
+   * pronta e consulta, sem ter regra nenhuma de autorizacao propria.
+   *
+   * E a diferenca entre entregar o PAPEL (que obriga cada servico a saber o que
+   * cada papel significa) e entregar as PERMISSOES (que so informam o resultado).
+   */
+  return c.json({ usuarioId: id, nome, email, role, premium, permissoes: permissoesDe(role) });
+});
+
+export default auth;

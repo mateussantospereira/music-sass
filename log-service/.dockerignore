@@ -1,0 +1,5 @@
+# Dependencias da maquina nao entram no contexto: o container instala as suas.
+node_modules
+.env
+.env.*
+.git

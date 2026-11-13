@@ -1,0 +1,195 @@
+# =============================================================================
+# Riff — biblioteca de música: extração via yt-dlp, playlists e downloads
+# =============================================================================
+# Cinco containers, uma rede, UM ponto de entrada público.
+#
+#   navegador -> app (porta 8222, subdomínio do aluno)         [público]
+#                  |  http://auth-service:3000               [interno]
+#                  |  http://log-service:3000                [interno]
+#                  |  http://minio:9000                       [interno]
+#                  v
+#              auth-service   +   log-service   +   redis   +   minio
+#
+# Só o `app` publica porta. Os demais são alcançáveis apenas pelo nome do
+# serviço dentro da rede `interna`; não existe segundo ponto de entrada público.
+#
+# Todas as credenciais podem ser sobrescritas por um `.env` (veja
+# `.env.example`). Os valores padrão são os do ambiente da disciplina.
+# =============================================================================
+
+x-db: &db
+  DB_HOST: ${DB_HOST:-35.226.64.52}
+  DB_PORT: ${DB_PORT:-3306}
+  DB_USER: ${DB_USER:-IAC_2026_02_mateus_pereira}
+  DB_PASSWORD: ${DB_PASSWORD:-o1112oo6}
+  DB_NAME: ${DB_NAME:-IAC_2026_02_mateus_pereira}
+
+services:
+  # ---------------------------------------------------------------------------
+  # APP — único container com porta publicada. Serve a SPA (React), a API de
+  # músicas/playlists e fala com os outros três serviços.
+  # ---------------------------------------------------------------------------
+  app:
+    build: .
+    ports:
+      - "8222:8222"
+    environment:
+      <<: *db
+      NODE_ENV: production
+      PORT: "8222"
+      AUTH_SERVICE_URL: http://auth-service:3000
+      AUTH_SERVICE_TIMEOUT_MS: ${AUTH_SERVICE_TIMEOUT_MS:-5000}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:3000}
+      LOG_INGEST_TOKEN: ${LOG_INGEST_TOKEN:-}
+      # Object storage dos áudios e capas. O app é o único que fala com o
+      # MinIO; o navegador recebe os bytes através dele.
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-isw055-mateus}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e3316f32df8692e0ee4571fc7524465e}
+      MINIO_BUCKET: ${MINIO_BUCKET:-riff-midias}
+      # Plano Pro. Sem as chaves do Stripe, o checkout responde 503 e o resto
+      # do produto continua funcionando no plano gratuito.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_LABEL: ${STRIPE_PRICE_LABEL:-R$ 29,00/mês}
+      LIMITE_MUSICAS_GRATIS: ${LIMITE_MUSICAS_GRATIS:-10}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://mateus-pereira-isw055.lapps.studio}
+      # Segredo compartilhado com o auth-service para o webhook do Stripe
+      # marcar/desmarcar o plano Pro de um usuário.
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN:-c5bbcf267c5a85f6cae783edf698e59a5c90f76f9be5381e}
+    depends_on:
+      - auth-service
+      - log-service
+      - minio
+    networks:
+      - interna
+    mem_limit: 1g
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:8222/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  # ---------------------------------------------------------------------------
+  # AUTH-SERVICE — cadastro, login, papéis e permissões. SEM `ports:`.
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build: ./auth-service
+    environment:
+      <<: *db
+      NODE_ENV: production
+      PORT: "3000"
+      JWT_SECRET: ${JWT_SECRET:-0ChcWFxPMJjE5Pla7CSpqpKk01iTK3ZoMHuQjkO8QkAuGd1}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      # O link de redefinição volta a entrar pelo app, o único domínio público.
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://mateus-pereira-isw055.lapps.studio}
+      RESET_TOKEN_TTL_MINUTES: ${RESET_TOKEN_TTL_MINUTES:-30}
+      MAIL_HOST: ${MAIL_HOST:-sandbox.smtp.mailtrap.io}
+      MAIL_PORT: ${MAIL_PORT:-2525}
+      MAIL_USER: ${MAIL_USER:-bbdcf182c308d9}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-6319afa2afaa8c}
+      MAIL_FROM: ${MAIL_FROM:-nao-responda@sandbox.mailtrap.io}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Riff}
+      LOG_SERVICE_URL: ${LOG_SERVICE_URL:-http://log-service:3000}
+      LOG_INGEST_TOKEN: ${LOG_INGEST_TOKEN:-}
+      INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN:-c5bbcf267c5a85f6cae783edf698e59a5c90f76f9be5381e}
+    networks:
+      - interna
+    mem_limit: 1g
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  # ---------------------------------------------------------------------------
+  # REDIS — Streams da auditoria. SEM `ports:`.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    networks:
+      - interna
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: always
+
+  # ---------------------------------------------------------------------------
+  # LOG-SERVICE — auditoria "quem fez o quê, e quando". SEM `ports:`.
+  # ---------------------------------------------------------------------------
+  log-service:
+    build: ./log-service
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_STREAM: ${REDIS_STREAM:-auditoria:eventos}
+      REDIS_STREAM_MAXLEN: ${REDIS_STREAM_MAXLEN:-50000}
+      AUTH_SERVICE_URL: http://auth-service:3000
+      PERMISSAO_LEITURA: consultar:logs
+      LOG_INGEST_TOKEN: ${LOG_INGEST_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - interna
+    mem_limit: 1g
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  # ---------------------------------------------------------------------------
+  # MINIO — object storage dos áudios e capas. SEM `ports:`.
+  # Os binários das músicas ficam aqui; no MariaDB só a chave.
+  # ---------------------------------------------------------------------------
+  minio:
+    image: elestio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-isw055-mateus}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-e3316f32df8692e0ee4571fc7524465e}
+    volumes:
+      - minio-data:/data
+    networks:
+      - interna
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+networks:
+  interna:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.241.55.0/24
+
+volumes:
+  minio-data:
