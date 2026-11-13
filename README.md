@@ -125,6 +125,8 @@ Pontos importantes:
 9. `16-conta-volta-para-free.png` — após o webhook `customer.subscription.deleted`,
    o plano volta a ser `Gratuito` com 10/10 músicas usadas — o Pro acabou quando o
    webhook chegou.
+10. `17-webhook-idempotente.png` — reenvio do mesmo `checkout.session.completed`
+    (assinatura nova e válida) responde `200 { duplicado: true }` sem efeito duplicado.
 
 > Para reproduzir tudo em qualquer conta: ver a seção
 > [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro-assinatura-recorrente).
