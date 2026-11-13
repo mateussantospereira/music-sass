@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, Eye, EyeOff, ShieldCheck, ListMusic, CloudDownload } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, ShieldCheck, ListMusic, Headphones } from "lucide-react";
 import { LogoMark } from "../components/LogoMark";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../components/ui/toast";
@@ -61,7 +61,7 @@ export function Entrar({ modoInicial = "login" }: { modoInicial?: "login" | "cad
             Extraia o áudio de qualquer vídeo do YouTube, organize em playlists e compartilhe — tudo num só lugar.
           </p>
           <ul className="mt-8 space-y-3 text-sm text-primary-foreground/80">
-            <li className="flex items-center gap-3"><CloudDownload size={18} /> Stream e download (m4a) no navegador</li>
+            <li className="flex items-center gap-3"><Headphones size={18} /> Stream direto no navegador, onde você estiver</li>
             <li className="flex items-center gap-3"><ListMusic size={18} /> Playlists com ordenação e player contínuo</li>
             <li className="flex items-center gap-3"><ShieldCheck size={18} /> Isolamento por usuário, papéis e auditoria</li>
           </ul>

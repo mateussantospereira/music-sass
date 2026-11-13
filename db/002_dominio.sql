@@ -6,7 +6,7 @@
 --   usuarios 1---N musicas            (quem curou a faixa)
 --   usuarios 1---N playlists
 --   playlists N---N musicas           (via playlist_musicas)
---   musicas 1---N compartilhamentos   (quem pode ouvir/baixar)
+--   musicas 1---N compartilhamentos   (quem pode ouvir)
 --   playlists 1---N compartilhamentos
 --
 -- `musicas.usuario_id` é o dono do registro. É por ele que TODA consulta de

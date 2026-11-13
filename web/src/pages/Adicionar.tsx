@@ -57,14 +57,14 @@ export function Adicionar() {
         {erro && <p role="alert" className="mt-3 rounded-md border border-amber-400/60 bg-amber-50 px-3 py-2 text-sm text-amber-800">{erro}</p>}
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Sparkles size={14} /> yt-dlp + ffmpeg no servidor, nada passa pelo seu navegador.</p>
+          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Sparkles size={14} /> O processamento acontece no servidor; seu navegador só transmite.</p>
           <Button type="submit" size="lg" disabled={enviando}>{enviando ? "Enviando…" : "Extrair áudio"}</Button>
         </div>
       </form>
 
       <div className="mt-6 rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-        <p className="flex items-center gap-2 font-semibold text-foreground"><Music2 size={16} /> Por que m4a?</p>
-        <p className="mt-1.5">Escolhemos o container AAC pela qualidade por megabyte: streaming rápido, download pequeno e compatibilidade em qualquer navegador.</p>
+        <p className="flex items-center gap-2 font-semibold text-foreground"><Music2 size={16} /> Por que este formato?</p>
+        <p className="mt-1.5">O áudio fica no seu registro, pronto para tocar no navegador — rápido, leve e compatível com qualquer dispositivo.</p>
       </div>
     </div>
   );

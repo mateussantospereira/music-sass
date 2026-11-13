@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Sparkles, ListMusic, MousePointerClick, ShieldCheck, CloudDownload,
+  ArrowRight, Sparkles, ListMusic, MousePointerClick, ShieldCheck, Headphones,
   Music2, Library, Users, Check, ChevronRight,
 } from "lucide-react";
 import { Logo, LogoMark } from "../components/LogoMark";
@@ -8,18 +8,18 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 
 const RECURSOS = [
-  { icone: MousePointerClick, titulo: "Cole o link, a gente extrai", texto: "URL do YouTube no formulário e o Riff baixa o áudio no servidor com yt-dlp. Em minutos a faixa está na sua biblioteca." },
+  { icone: MousePointerClick, titulo: "Cole o link, a gente extrai", texto: "URL do YouTube no formulário e o Riff processa o áudio no servidor. Em minutos a faixa está pronta na sua biblioteca." },
   { icone: Library, titulo: "Sua biblioteca, seu controle", texto: "Cada curador enxerga a própria biblioteca. O que é compartilhado aparece só para quem foi liberado — o resto é 403." },
   { icone: ListMusic, titulo: "Playlists que fazem sentido", texto: "Monte listas, ordene as faixas e aperte play. O player continua na tela enquanto você navega." },
-  { icone: CloudDownload, titulo: "Ouvir e baixar", texto: "Stream direto no navegador e download do arquivo original (m4a) sempre que você quiser." },
+  { icone: Headphones, titulo: "Feito para ouvir", texto: "Stream direto no navegador, sem arquivos soltos pela máquina: a faixa toca onde você estiver." },
   { icone: Users, titulo: "Curador e ouvinte", texto: "Papéis reais no backend: curador publica, ouvinte consome o que foi liberado, admin administra. Sem botão fingindo ser segurança." },
   { icone: ShieldCheck, titulo: "Auditoria de verdade", texto: "Toda ação vira evento no log: quem adicionou, quem compartilhou, quem baixou — com data, hora e IP." },
 ];
 
 const PASSOS = [
   { n: "01", titulo: "Cole o link", texto: "Qualquer vídeo do YouTube — watch, Shorts ou youtu.be." },
-  { n: "02", titulo: "A gente extrai", texto: "yt-dlp roda no servidor, o áudio vai para o MinIO e a faixa aparece como “pronta”." },
-  { n: "03", titulo: "Ouça e baixe", texto: "Toque no player ou baixe o .m4a. Compartilhe a playlist com quem você quiser." },
+  { n: "02", titulo: "A gente processa", texto: "A extração roda no servidor; o áudio fica vinculado ao seu registro e a faixa aparece como “pronta”." },
+  { n: "03", titulo: "Ouça", texto: "Toque no player em qualquer tela. Compartilhe a playlist com quem você quiser." },
 ];
 
 const FAQ = [
@@ -56,7 +56,7 @@ export function Landing() {
             </h1>
             <p className="mt-6 max-w-md text-lg text-muted-foreground">
               O Riff transforma links do YouTube em uma biblioteca de áudio sua — organizada em playlists,
-              com stream no navegador, download e compartilhamento controlado por papel.
+              com stream no navegador e compartilhamento controlado por papel.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/cadastro"><Button size="lg">Criar conta grátis <ArrowRight size={18} /></Button></Link>
@@ -152,7 +152,7 @@ export function Landing() {
           <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">Comece grátis. Pro por R$ 29/mês.</h2>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 text-left">
             {[
-              { nome: "Gratuito", preco: "R$ 0", itens: ["10 músicas", "Playlists ilimitadas", "Compartilhamento com ouvintes", "Stream + download"], cta: "Começar grátis", destaque: false },
+              { nome: "Gratuito", preco: "R$ 0", itens: ["10 músicas", "Playlists ilimitadas", "Compartilhamento com ouvintes", "Stream no navegador"], cta: "Começar grátis", destaque: false },
               { nome: "Pro", preco: "R$ 29/mês", itens: ["Músicas ilimitadas", "Tudo do plano Gratuito", "Suporte prioritário", "Para times e curadores sérios"], cta: "Assinar Pro", destaque: true },
             ].map((plano) => (
               <div key={plano.nome} className={`rounded-2xl border p-6 shadow-[var(--shadow-card)] ${plano.destaque ? "border-primary bg-primary text-primary-foreground" : "bg-card"}`}>

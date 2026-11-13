@@ -58,7 +58,7 @@ export function Plano() {
     ["Até 10 músicas na biblioteca", true],
     ["Playlists ilimitadas", true],
     ["Compartilhar com ouvintes", true],
-    ["Stream e download (m4a)", true],
+    ["Stream de áudio no navegador", true],
     ["Músicas ilimitadas", false],
   ];
   const proItens: [string, boolean][] = [

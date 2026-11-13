@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Riff — SaaS de música: biblioteca colaborativa, extração via yt-dlp e playlists",
+  "description": "Riff — SaaS de música: biblioteca colaborativa, extração de áudio e playlists",
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts",

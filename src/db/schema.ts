@@ -17,7 +17,7 @@ import {
  *   musicas            -> faixas curadas/baixadas (o recurso principal)
  *   playlists          -> coleções de músicas por usuário
  *   playlist_musicas   -> N:N entre playlist e música, com ordem
- *   compartilhamentos  -> quem pode ouvir/baixar o quê
+ *   compartilhamentos  -> quem pode ouvir o quê
  *   assinaturas        -> identificadores do Stripe (plano Pro)
  *
  * `usuarios` e `reset_tokens` pertencem ao auth-service. A declaração de
@@ -35,7 +35,7 @@ export const usuarios = mysqlTable("usuarios", {
   criadoEm: timestamp("criado_em").defaultNow(),
 });
 
-/** Status de extração/download de uma faixa. */
+/** Status de extração de uma faixa. */
 export type StatusMusica = "processando" | "pronta" | "erro";
 
 /**

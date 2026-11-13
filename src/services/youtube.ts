@@ -1,14 +1,14 @@
 /**
- * Extração de áudio a partir de uma URL (YouTube) via yt-dlp.
+ * Extração de áudio a partir de uma URL (YouTube).
  *
  * O Riff não "baixa por dentro do navegador": a extração roda no servidor
  * (container `app`), o áudio é enviado ao MinIO e a chave fica ligada ao
  * registro `musicas`. Quem chama as funções passa a URL validada e recebe o
  * caminho do arquivo temporário ou a promessa de um resultado.
  *
- * yt-dlp + ffmpeg são instalados na imagem do app (veja Dockerfile). Se não
- * estiverem disponíveis, a extração falha com mensagem clara e a música fica
- * com `status = 'erro'`.
+ * Os utilitários de extração são instalados na imagem do app (veja
+ * Dockerfile). Se não estiverem disponíveis, a extração falha com mensagem
+ * clara e a música fica com `status = 'erro'`.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -89,14 +89,14 @@ export async function extrairMetadados(url: string): Promise<InfoVideo> {
     { timeoutMs: 60_000 }
   );
   if (code !== 0) {
-    throw new Error(limparErroYtdlp(stderr) || `yt-dlp terminou com código ${code}`);
+    throw new Error(limparErro(stderr) || `a extração terminou com código ${code}`);
   }
 
   let dados: Record<string, unknown>;
   try {
     dados = JSON.parse(stdout) as Record<string, unknown>;
   } catch {
-    throw new Error("yt-dlp devolveu metadados inválidos.");
+    throw new Error("A ferramenta devolveu metadados inválidos.");
   }
 
   const titulo = String(dados.title ?? "Sem título").slice(0, 200);
@@ -126,7 +126,7 @@ export async function baixarAudio(url: string): Promise<{ bytes: Buffer; ext: "m
       { timeoutMs: 240_000 }
     );
     if (code !== 0) {
-      throw new Error(limparErroYtdlp(stderr) || `yt-dlp terminou com código ${code}`);
+      throw new Error(limparErro(stderr) || `a extração terminou com código ${code}`);
     }
 
     const arquivo = join(dir, "audio.m4a");
@@ -156,8 +156,8 @@ export async function baixarCapa(url: string): Promise<{ bytes: Buffer; contentT
   }
 }
 
-/** Reduz o ruído do yt-dlp a uma linha útil para o usuário. */
-function limparErroYtdlp(stderr: string): string {
+/** Reduz a saída da ferramenta a uma linha útil para o usuário. */
+function limparErro(stderr: string): string {
   const linha = stderr
     .split("\n")
     .map((l) => l.trim())

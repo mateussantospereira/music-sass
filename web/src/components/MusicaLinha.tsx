@@ -1,8 +1,8 @@
-import { CloudDownload, Music2, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react";
+import { Music2, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { usePlayer } from "../lib/player";
-import { baixarArquivo, urlComToken } from "../lib/api";
+import { urlComToken } from "../lib/api";
 import { formatarBytes, formatarDuracao, rotuloStatus, statusBadgeVariant } from "../lib/format";
 import type { Musica } from "../lib/tipos";
 
@@ -56,16 +56,6 @@ export function MusicaLinha({ musica, podeEditar, mostrarDono, onEditar, onApaga
 
       {/* Ações */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Baixar .m4a"
-          aria-label="Baixar"
-          disabled={musica.status !== "pronta"}
-          onClick={() => baixarArquivo(`/api/musicas/${musica.id}/download`, `${musica.titulo}.m4a`)}
-        >
-          <CloudDownload size={18} />
-        </Button>
         {podeEditar && (
           <>
             <Button variant="ghost" size="icon" title="Editar" aria-label="Editar" onClick={() => onEditar?.(musica)}><Pencil size={17} /></Button>

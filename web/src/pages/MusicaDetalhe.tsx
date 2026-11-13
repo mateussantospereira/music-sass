@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, CloudDownload, ExternalLink, Music2, Pause, Pencil, Play, RotateCw, Share2, Trash2 } from "lucide-react";
-import { api, urlComToken, baixarArquivo } from "../lib/api";
+import { ArrowLeft, ExternalLink, Music2, Pause, Pencil, Play, RotateCw, Share2, Trash2 } from "lucide-react";
+import { api, urlComToken } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { usePlayer } from "../lib/player";
 import { useToast } from "../components/ui/toast";
@@ -126,9 +126,6 @@ export function MusicaDetalhe() {
             <Button size="lg" onClick={() => { if (isAtual) alternar(); else tocar(dados); }} disabled={!tocavel} className="min-w-40">
               {isAtual && tocando ? <><Pause size={18} fill="currentColor" /> Pausar</> : <><Play size={18} fill="currentColor" className="ml-0.5" /> Tocar</>}
             </Button>
-            <Button size="lg" variant="outline" disabled={dados.status !== "pronta"} onClick={() => baixarArquivo(`/api/musicas/${dados.id}/download`, `${dados.titulo}.m4a`)}>
-              <CloudDownload size={18} /> Baixar
-            </Button>
             {podeEditar && (
               <>
                 <Button variant="ghost" size="icon" title="Editar metadados" onClick={() => { setTitulo(dados.titulo); setArtista(dados.artista ?? ""); setEditando(true); }}><Pencil size={18} /></Button>
@@ -157,7 +154,7 @@ export function MusicaDetalhe() {
 
       {dados.origemUrl && (
         <a href={dados.origemUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-          <ExternalLink size={14} /> Ver origem no YouTube
+          <ExternalLink size={14} /> Origem do conteúdo
         </a>
       )}
 

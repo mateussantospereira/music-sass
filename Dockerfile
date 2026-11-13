@@ -10,12 +10,12 @@ COPY web/ ./
 RUN bun run build
 
 # =============================================================================
-# Estágio 2 — runtime do app (Hono/Bun) + yt-dlp + ffmpeg
+# Estágio 2 — runtime do app (Hono/Bun) + utilitários de áudio
 # =============================================================================
 FROM oven/bun:latest
 WORKDIR /app
 
-# yt-dlp (binário standalone) + ffmpeg (conversão para m4a) + python3 mínimo.
+# Ferramenta de extração + ffmpeg (conversão para m4a).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
  && curl -fsSL -o /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \

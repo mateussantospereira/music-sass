@@ -8,7 +8,7 @@
  *
  * Papéis do negócio:
  *
- *   curador -> adiciona músicas por URL do YouTube (via yt-dlp), organiza a
+ *   curador -> adiciona músicas por URL do YouTube, organiza a
  *              própria biblioteca, cria playlists e compartilha com ouvintes
  *   ouvinte -> só enxerga o que foi compartilhado com ele; ouve e baixa,
  *              e pode montar playlists a partir do que tem acesso
@@ -28,7 +28,7 @@ export type Papel = "admin" | "curador" | "ouvinte";
 export type Permissao =
   /** Ler músicas que a regra de visibilidade permite. */
   | "ler:musica"
-  /** Adicionar uma música pela URL (extração via yt-dlp). */
+  /** Adicionar uma música pela URL (extração no servidor). */
   | "criar:musica"
   /** Editar metadados de uma música sua (admin: qualquer música). */
   | "editar:musica"

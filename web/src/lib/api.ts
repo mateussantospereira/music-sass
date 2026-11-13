@@ -39,26 +39,9 @@ export async function api<T = unknown>(
   return { ok: resposta.ok, status: resposta.status, data: dados };
 }
 
-/** URL de stream/download com o token na query (a tag <audio> não envia header). */
+/** URL de stream com o token na query (a tag <audio> não envia header). */
 export function urlComToken(path: string): string {
   const token = obterToken();
   const sep = path.includes("?") ? "&" : "?";
   return token ? `${path}${sep}token=${encodeURIComponent(token)}` : path;
-}
-
-/** Baixa um arquivo autenticado para o disco do usuário. */
-export async function baixarArquivo(path: string, nomeArquivo: string): Promise<boolean> {
-  const token = obterToken();
-  const resposta = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-  if (!resposta.ok) return false;
-  const blob = await resposta.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nomeArquivo;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  return true;
 }

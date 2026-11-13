@@ -3,7 +3,7 @@
 **Cole o link do YouTube. A sua música fica com você.**
 
 Riff é um SaaS de biblioteca de música: você cola a URL de um vídeo, o sistema
-extrai o áudio no servidor com **yt-dlp + ffmpeg**, guarda o resultado no
+processa o áudio no servidor, guarda o resultado no
 **MinIO** e organiza tudo em **playlists** com papéis de negócio reais
 (`admin`, `curador`, `ouvinte`), isolamento por usuário, auditoria e um plano
 comercial gratuito/Pro.
@@ -26,7 +26,7 @@ comercial gratuito/Pro.
 - [Isolamento por usuário](#isolamento-por-usuário)
 - [Eventos de negócio (auditoria)](#eventos-de-negócio-auditoria)
 - [Mídia no MinIO](#mídia-no-minio)
-- [Extração com yt-dlp](#extração-com-yt-dlp)
+- [Extração de áudio](#extração-de-áudio)
 - [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro)
 - [API](#api)
 - [Como rodar](#como-rodar)
@@ -58,7 +58,7 @@ O Riff resolve isso com quatro ideias simples:
 3. **Compartilhamento explícito:** o ouvinte só enxerga o que o curador liberou
    — música a música ou playlist inteira (`compartilhamentos`).
 4. **Auditoria de negócio:** adição, extração concluída/falha, edição,
-   remoção, reprodução, download, compartilhamento e tentativas negadas viram
+   remoção, reprodução, compartilhamento e tentativas negadas viram
    eventos no Redis Streams, consultáveis pelo admin.
 
 ---
@@ -86,7 +86,7 @@ flowchart TB
     AUTH -->|POST /eventos| LOG
     LOG -->|XADD / XRANGE| REDIS
     APP -->|upload / leitura| MINIO
-    APP -->|yt-dlp + ffmpeg| YT[YouTube]
+    APP -->|extração de áudio| YT[YouTube]
     APP -->|Drizzle ORM| DB
     AUTH -->|Drizzle ORM| DB
 ```
@@ -251,8 +251,8 @@ async function podeLer(musica, usuarioId, role) {
   liberado, e 404 quando o recurso não existe.
 
 O áudio nunca sai sem checagem: `GET /api/musicas/:id/stream` e
-`GET /api/musicas/:id/download` autenticam (header `Authorization` ou `?token=`
-para a tag `<audio>`), revalidam a visibilidade e só então devolvem os bytes.
+`GET /api/musicas/:id/stream` autentica (header `Authorization` ou `?token=`
+para a tag `<audio>`), revalida a visibilidade e só então devolve os bytes.
 
 ---
 
@@ -265,10 +265,10 @@ Stream `auditoria:eventos` com **quem, quando e o quê**:
 | --- | --- |
 | `musica_adicionada` | Uma música é criada a partir de uma URL. |
 | `musica_pronta` | A extração do áudio terminou e o arquivo está no MinIO. |
-| `extracao_falhou` | yt-dlp/ffmpeg falhou; `erro_msg` guarda o motivo. |
+| `extracao_falhou` | A extração falhou; `erro_msg` guarda o motivo. |
 | `musica_editada` | Título/artista mudam. |
 | `musica_removida` | Faixa, capa e relações são apagados. |
-| `musica_reproduzida` / `musica_baixada` | Stream no player / download do `.m4a`. |
+| `musica_reproduzida` | Stream da faixa no player. |
 | `musica_compartilhada` / `musica_descompartilhada` | Liberação/revogação para um ouvinte. |
 | `playlist_criada` / `playlist_editada` / `playlist_removida` | Ciclo de vida da playlist. |
 | `playlist_musica_adicionada` / `playlist_musica_removida` | Curadoria das faixas. |
@@ -289,16 +289,16 @@ O admin consulta os últimos eventos em **Painel → Auditoria** ou por
 - Chave do áudio: `musicas/<usuario_id>/<musica_id>/<timestamp>-audio.m4a`.
 - Chave da capa: `capas/<usuario_id>/<musica_id>/<timestamp>-capa.<ext>`.
 - O MariaDB guarda **somente as chaves** em `musicas`; o binário não entra no banco.
-- O navegador nunca fala com o MinIO: leitura/download passam por rotas
+- O navegador nunca fala com o MinIO: a leitura passa por rotas
   autenticadas que conferem dono ou compartilhamento antes de devolver os bytes.
 
-## Extração com yt-dlp
+## Extração de áudio
 
 1. `POST /api/musicas { url }` valida a URL (somente YouTube:
    `watch`, `youtu.be`, `shorts`), cria o registro com `status = 'processando'`
    e responde `201`.
-2. Em background, o worker roda `yt-dlp --dump-single-json` para metadados,
-   `yt-dlp -x --audio-format m4a` para o áudio e baixa a thumbnail.
+2. Em background, o worker obtém os metadados e o áudio (m4a) no servidor e
+   baixa a capa quando houver.
 3. O áudio/capa sobem para o MinIO; o registro vira `status = 'pronta'` com
    `chave_audio`, `chave_capa`, `duracao_seg` e `tamanho`.
 4. Se algo falhar, o registro vira `status = 'erro'` com `erro_msg`, e a tela
@@ -348,7 +348,6 @@ Todas as rotas abaixo, exceto login/cadastro/health, exigem
 | `DELETE` | `/api/musicas/:id` | `apagar:musica` | Apaga faixa, capa e relações. |
 | `POST` | `/api/musicas/:id/reprocessar` | `editar:musica` | Refaz a extração de uma faixa com erro. |
 | `GET` | `/api/musicas/:id/stream` | `ler:musica` | Player (header ou `?token=`). |
-| `GET` | `/api/musicas/:id/download` | `ler:musica` | Download do `.m4a`. |
 | `GET` | `/api/musicas/:id/capa` | `ler:musica` | Capa do álbum. |
 | `POST` | `/api/musicas/:id/compartilhar` | `compartilhar:musica` | Libera para um ouvinte. |
 | `DELETE` | `/api/musicas/:id/compartilhar/:usuarioId` | `compartilhar:musica` | Revoga o acesso. |
@@ -407,8 +406,8 @@ cd log-service && REDIS_URL=redis://localhost:6379 bun run dev
 bun run dev   # app em http://localhost:8222
 ```
 
-Para a extração com yt-dlp funcionar, `yt-dlp` e `ffmpeg` precisam estar no
-PATH (a imagem Docker já os instala). Sem eles, a música fica com
+Para a extração funcionar, a imagem Docker do app já instala os utilitários
+necessários. Sem eles, a música fica com
 `status = 'erro'` e a tela oferece reprocessar.
 
 Com Docker:
@@ -508,12 +507,12 @@ repositório e o banco deixar de ter as tabelas antigas.
 │   ├── db/                   # schema Drizzle, migrate e seed
 │   ├── middleware/           # autenticação, permissão e auditoria de 403
 │   ├── routes/               # musicas, playlists, usuários, logs, plano, auth
-│   └── services/             # clientes auth/log/MinIO/Stripe, yt-dlp, plano
+│   └── services/             # clientes auth/log/MinIO/Stripe, extração, plano
 ├── web/                      # SPA React + Tailwind (landing, biblioteca, player, playlists, admin)
 ├── auth-service/             # identidade, papéis e permissões (porta interna 3000)
 ├── log-service/              # auditoria em Redis Streams (porta interna 3000)
 ├── docs/prints/              # evidências visuais da entrega
-├── Dockerfile                # app (multi-stage: build web + runtime com yt-dlp/ffmpeg)
+├── Dockerfile                # app (multi-stage: build web + runtime com utilitários de áudio)
 ├── docker-compose.yml        # 5 serviços, 1 porta pública
 └── .env.example
 ```
@@ -531,7 +530,7 @@ repositório e o banco deixar de ter as tabelas antigas.
 - **Isolamento por construção.** `podeLer`/`ehDono` são as únicas portas; não
   existe consulta que "esqueça" o filtro, e o compartilhamento é uma tabela
   explícita, não um booleano solto.
-- **Extração assíncrona, não request bloqueante.** yt-dlp pode demorar; a API
+- **Extração assíncrona, não request bloqueante.** A extração pode demorar; a API
   responde `201` na hora e o cliente acompanha o `status` da música.
 - **Preço e limite são regras de negócio, não de pagamento.** O Stripe cobra;
   o app decide o que o plano gratuito pode fazer (`LIMITE_MUSICAS_GRATIS`).
@@ -546,4 +545,4 @@ repositório e o banco deixar de ter as tabelas antigas.
 ---
 
 Feito com Bun, Hono, React, Tailwind, Drizzle, MariaDB, Redis Streams, MinIO,
-yt-dlp, Docker e Portainer.
+Docker e Portainer.

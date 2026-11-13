@@ -31,8 +31,8 @@ function ehAdmin(role: Papel): boolean {
 }
 
 /**
- * Middleware para as rotas de stream/download: aceita o token pelo header
- * (fetch) OU pela query `?token=`, porque uma tag <audio> não envia header.
+ * Middleware das rotas de stream: aceita o token pelo header (fetch) OU pela
+ * query `?token=`, porque uma tag <audio> não envia header.
  * A query só é lida AQUI, nunca nas demais rotas.
  */
 const streamAuth = createMiddleware<Env>(async (c, next) => {
@@ -449,43 +449,6 @@ recursos.get("/:id/stream", streamAuth, async (c) => {
       "Content-Length": String(objeto.bytes.length),
       "Cache-Control": "private, no-store",
       "Accept-Ranges": "none",
-    },
-  });
-});
-
-/** GET /api/musicas/:id/download — baixar o arquivo. */
-recursos.get("/:id/download", streamAuth, async (c) => {
-  const id = Number(c.req.param("id"));
-  const musica = await carregarMusica(id);
-  if (!musica) return c.json({ error: "Música não encontrada" }, 404);
-  if (!(await podeLer(musica, c.get("usuarioId"), c.get("role")))) {
-    return recusaAcesso(c, "Esta música não está na sua biblioteca.");
-  }
-  if (!musica.chaveAudio) {
-    return c.json({ error: "O áudio ainda está sendo extraído. Tente em instantes.", status: musica.status }, 409);
-  }
-
-  const objeto = await obterObjeto(musica.chaveAudio);
-  if (!objeto) return c.json({ error: "Arquivo de áudio não encontrado no armazenamento." }, 404);
-
-  const nomeArquivo = `${(musica.titulo || "musica").replace(/[/\\?%*:|"<>]/g, "-").slice(0, 120)}.m4a`;
-
-  await registrar({
-    acao: "musica_baixada",
-    usuario_id: c.get("usuarioId"),
-    usuario: c.get("nome"),
-    papel: c.get("role"),
-    recurso: `musica:${id}`,
-    detalhe: musica.titulo,
-    ip: ipDe(c),
-  });
-
-  return new Response(new Uint8Array(objeto.bytes), {
-    headers: {
-      "Content-Type": musica.contentType ?? objeto.contentType,
-      "Content-Length": String(objeto.bytes.length),
-      "Content-Disposition": `attachment; filename="${nomeArquivo}"; filename*=UTF-8''${encodeURIComponent(nomeArquivo)}`,
-      "Cache-Control": "private, no-store",
     },
   });
 });
