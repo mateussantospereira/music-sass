@@ -286,7 +286,6 @@ plano.post("/checkout", authMiddleware, async (c) => {
       client_reference_id: String(usuarioId),
       metadata: { usuarioId: String(usuarioId) },
       subscription_data: { metadata: { usuarioId: String(usuarioId) } },
-      branding_settings: { display_name: "Riff" },
       success_url: `${APP_PUBLIC_URL}/painel/plano?checkout=sucesso`,
       cancel_url: `${APP_PUBLIC_URL}/painel/plano?checkout=cancelado`,
     });
