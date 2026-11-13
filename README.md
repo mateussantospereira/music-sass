@@ -1,19 +1,19 @@
-# MetaSass
+# Riff
 
-**Planeje, aprove e publique conteúdo para Instagram e Facebook sem perder o fio.**
+**Cole o link do YouTube. A sua música fica com você.**
 
-MetaSass é um SaaS de calendário editorial para agências e criadores: a equipe
-planeja os posts, o cliente aprova (ou pede ajustes) e o conteúdo vai para o ar
-com histórico de tudo o que aconteceu. O produto substitui a planilha, o grupo
-de WhatsApp e o "print da legenda" por um fluxo único, com papéis bem definidos
-e auditoria de cada ação.
+Riff é um SaaS de biblioteca de música: você cola a URL de um vídeo, o sistema
+extrai o áudio no servidor com **yt-dlp + ffmpeg**, guarda o resultado no
+**MinIO** e organiza tudo em **playlists** com papéis de negócio reais
+(`admin`, `curador`, `ouvinte`), isolamento por usuário, auditoria e um plano
+comercial gratuito/Pro.
 
 > 🔗 **App no ar:** https://mateus-pereira-isw055.lapps.studio
 >
 > 🎓 Projeto desenvolvido para a disciplina do professor
 > **[siriani](https://github.com/siriani)**.
 >
-> 📦 Repositório público: https://github.com/mateussantospereira/meta-sass
+> 📦 Repositório público: https://github.com/mateussantospereira/music-sass
 
 ---
 
@@ -26,6 +26,7 @@ e auditoria de cada ação.
 - [Isolamento por usuário](#isolamento-por-usuário)
 - [Eventos de negócio (auditoria)](#eventos-de-negócio-auditoria)
 - [Mídia no MinIO](#mídia-no-minio)
+- [Extração com yt-dlp](#extração-com-yt-dlp)
 - [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro)
 - [API](#api)
 - [Como rodar](#como-rodar)
@@ -39,24 +40,26 @@ e auditoria de cada ação.
 
 ## O problema e a proposta
 
-Uma agência produz conteúdo para vários clientes. Sem uma ferramenta:
+Quem cura música para estudo, trabalho ou para um time esbarra nos mesmos
+problemas:
 
-- o calendário vive numa planilha que ninguém atualiza;
-- a aprovação acontece por WhatsApp, sem registro de quem aprovou o quê;
-- quando o cliente pede ajuste, a versão anterior se perde;
-- ninguém sabe quem apagou um post ou quem publicou fora do horário.
+- as faixas ficam espalhadas em abas do YouTube "para assistir depois";
+- não existe uma biblioteca própria com a faixa em `.m4a` na máquina;
+- compartilhar com alguém significa mandar link e torcer;
+- ninguém sabe quem adicionou, quem baixou ou quem compartilhou o quê.
 
-O MetaSass resolve isso com quatro ideias simples:
+O Riff resolve isso com quatro ideias simples:
 
-1. **Um recurso principal claro:** o **post**, com título, legenda, conta
-   social, data agendada e status (`rascunho`, `agendado`, `aprovado`,
-   `publicado`, `ajustes`, `cancelado`).
-2. **Papéis de negócio reais:** `admin`, `social_media` e `cliente`, aplicados
-   no servidor — esconder um botão na tela não é segurança.
-3. **Aprovação rastreável:** cada decisão do cliente vira uma linha em
-   `aprovacoes`, com autor, data e comentário.
-4. **Auditoria de negócio:** criação, edição, aprovação, publicação, remoção e
-   tentativas negadas viram eventos no Redis Streams, consultáveis pelo admin.
+1. **Um recurso principal claro:** a **música** (`musicas`), criada a partir de
+   uma URL do YouTube e enriquecida com título, artista, duração, status de
+   extração (`processando`, `pronta`, `erro`), áudio e capa no MinIO.
+2. **Papéis de negócio reais:** `admin`, `curador` e `ouvinte`, aplicados no
+   servidor — esconder um botão na tela não é segurança.
+3. **Compartilhamento explícito:** o ouvinte só enxerga o que o curador liberou
+   — música a música ou playlist inteira (`compartilhamentos`).
+4. **Auditoria de negócio:** adição, extração concluída/falha, edição,
+   remoção, reprodução, download, compartilhamento e tentativas negadas viram
+   eventos no Redis Streams, consultáveis pelo admin.
 
 ---
 
@@ -69,11 +72,11 @@ flowchart TB
     end
 
     subgraph Docker["Rede interna do Docker · 10.241.55.0/24"]
-        APP["app · Bun + Hono<br/>porta 8222 (única pública)<br/>landing, painel e API"]
+        APP["app · Bun + Hono<br/>porta 8222 (única pública)<br/>SPA React + API REST"]
         AUTH["auth-service · Bun + Hono<br/>identidade, papéis e permissões"]
         LOG["log-service · Bun + Hono<br/>auditoria"]
         REDIS[("Redis 7<br/>Stream auditoria:eventos")]
-        MINIO[("MinIO<br/>bucket metasass-midias")]
+        MINIO[("MinIO<br/>bucket riff-midias")]
         DB[("MariaDB<br/>dados de negócio")]
     end
 
@@ -83,6 +86,7 @@ flowchart TB
     AUTH -->|POST /eventos| LOG
     LOG -->|XADD / XRANGE| REDIS
     APP -->|upload / leitura| MINIO
+    APP -->|yt-dlp + ffmpeg| YT[YouTube]
     APP -->|Drizzle ORM| DB
     AUTH -->|Drizzle ORM| DB
 ```
@@ -94,11 +98,14 @@ Pontos importantes:
 - **Identidade separada do negócio.** O `app` não tem `JWT_SECRET`, não lê
   senha e não decide papel: ele pergunta ao `auth-service` (`GET /me`), que
   devolve o perfil e a lista de permissões.
+- **Frontend desacoplado.** A SPA (React + Tailwind, estilo shadcn) vive em
+  [`web/`](web) e é compilada para estático; o `app` serve a build e a API na
+  mesma origem (`/api/*`). Não há segundo ponto de entrada.
 - **Auditoria separada do banco transacional.** Log de negócio é escrita
   sequencial e leitura cronológica: Redis Streams, não MariaDB.
 - **Um banco, dois donos.** `usuarios`/`reset_tokens` pertencem ao
-  `auth-service`; `contas_sociais`, `posts`, `midias`, `aprovacoes` e
-  `assinaturas` pertencem ao `app`.
+  `auth-service`; `musicas`, `playlists`, `playlist_musicas`,
+  `compartilhamentos` e `assinaturas` pertencem ao `app`.
 
 ---
 
@@ -109,42 +116,40 @@ O mapa de permissões mora em
 O `app` recebe a lista pronta e apenas consulta — não existe uma segunda cópia
 da regra no frontend nem nas rotas.
 
-| Permissão | `admin` | `social_media` | `cliente` |
+| Permissão | `admin` | `curador` | `ouvinte` |
 | --- | :---: | :---: | :---: |
-| `ler:post` | ✅ | ✅ | ✅ |
-| `criar:post` | ✅ | ✅ | — |
-| `editar:post` | ✅ | ✅ (próprios) | — |
-| `apagar:post` | ✅ | ✅ (próprios) | — |
-| `publicar:post` | ✅ | ✅ (próprios) | — |
-| `aprovar:post` | ✅ | — | ✅ (atribuídos) |
-| `gerenciar:contas` | ✅ | ✅ (próprias) | — |
-| `enviar:midia` | ✅ | ✅ (próprios) | — |
+| `ler:musica` | ✅ | ✅ (+ compartilhadas com ele) | ✅ (só compartilhadas com ele) |
+| `criar:musica` | ✅ | ✅ | — |
+| `editar:musica` | ✅ | ✅ (próprias) | — |
+| `apagar:musica` | ✅ | ✅ (próprias) | — |
+| `gerenciar:playlist` | ✅ | ✅ (próprias) | ✅ (próprias) |
+| `compartilhar:musica` | ✅ | ✅ (suas) | — |
 | `listar:usuarios` | ✅ | — | — |
 | `alterar:papel` | ✅ | — | — |
 | `consultar:logs` | ✅ | — | — |
 
-- Todo cadastro novo nasce como **`social_media`**. Virar `cliente` ou `admin`
+- Todo cadastro novo nasce como **`curador`**. Virar `ouvinte` ou `admin`
   é uma decisão administrativa (`PATCH /api/usuarios/:id/role`).
-- `cliente` **não** edita nem publica: ele lê e aprova apenas os posts em que
-  foi atribuído (`posts.cliente_id`).
+- O **ouvinte** não cria nem edita músicas: ele consome o que foi liberado
+  para ele e monta playlists a partir do que tem acesso.
 - O servidor responde **403** quando a permissão falta, mesmo que a chamada
   venha direto para a API, sem passar pela interface.
 
 ### 403 documentado
 
 ```bash
-# login como cliente
+# login como ouvinte
 TOKEN=$(curl -s -X POST https://mateus-pereira-isw055.lapps.studio/api/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"cliente@metasass.app","senha":"Cliente@123"}' | jq -r .token)
+  -d '{"email":"ouvinte@riff.app","senha":"Ouvinte@123"}' | jq -r .token)
 
-# tentar criar um post (o papel cliente não tem criar:post)
-curl -i -X POST https://mateus-pereira-isw055.lapps.studio/api/posts \
+# tentar adicionar música (ouvinte não tem criar:musica)
+curl -i -X POST https://mateus-pereira-isw055.lapps.studio/api/musicas \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"titulo":"x","conta_social_id":1,"data_agendada":"2026-12-01T10:00:00Z"}'
+  -d '{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 # HTTP/2 403
-# {"error":"Ação negada: o seu papel (cliente) não tem a permissão \"criar:post\".", ...}
+# {"error":"Ação negada: o seu papel (ouvinte) não tem a permissão \"criar:musica\".", ...}
 ```
 
 ---
@@ -157,13 +162,14 @@ Todas as tabelas do domínio são criadas por migrations versionadas em
 
 ```mermaid
 erDiagram
-    usuarios ||--o{ contas_sociais : conecta
-    usuarios ||--o{ posts : cria
-    usuarios ||--o{ aprovacoes : decide
+    usuarios ||--o{ musicas : curadoria
+    usuarios ||--o{ playlists : cria
+    usuarios ||--o{ compartilhamentos : recebe
     usuarios ||--o| assinaturas : assina
-    contas_sociais ||--o{ posts : recebe
-    posts ||--o{ midias : contem
-    posts ||--o{ aprovacoes : historico
+    playlists ||--o{ playlist_musicas : contem
+    musicas ||--o{ playlist_musicas : aparece_em
+    musicas ||--o{ compartilhamentos : liberada_em
+    playlists ||--o{ compartilhamentos : liberada_em
 
     usuarios {
         int id PK
@@ -173,39 +179,36 @@ erDiagram
         varchar role
         boolean premium
     }
-    contas_sociais {
+    musicas {
         int id PK
         int usuario_id FK
-        varchar rede
-        varchar nome
-        varchar identificador
-        boolean ativa
-    }
-    posts {
-        int id PK
-        int usuario_id FK
-        int conta_social_id FK
-        int cliente_id FK
         varchar titulo
-        text legenda
-        datetime data_agendada
+        varchar artista
+        varchar origem_url
+        int duracao_seg
         varchar status
-        datetime publicado_em
-    }
-    midias {
-        int id PK
-        int post_id FK
-        varchar chave_objeto
-        varchar nome_arquivo
+        varchar chave_audio
+        varchar chave_capa
         varchar content_type
         int tamanho
     }
-    aprovacoes {
+    playlists {
         int id PK
-        int post_id FK
         int usuario_id FK
-        varchar decisao
-        text comentario
+        varchar nome
+        varchar descricao
+    }
+    playlist_musicas {
+        int playlist_id FK
+        int musica_id FK
+        int ordem
+    }
+    compartilhamentos {
+        int id PK
+        int usuario_id FK
+        int musica_id FK
+        int playlist_id FK
+        int concedido_por FK
     }
     assinaturas {
         int usuario_id PK
@@ -221,32 +224,35 @@ Arquivos de migration:
 | Arquivo | O que faz |
 | --- | --- |
 | `db/000_limpar_legado.sql` | Remove tabelas do projeto anterior (explícito e separado). |
-| `db/001_auth.sql` | Cria/completa `usuarios` e `reset_tokens`. |
-| `db/002_dominio.sql` | Cria `contas_sociais`, `posts`, `midias`, `aprovacoes`, `assinaturas`. |
-| `db/003_seed.sql` | Popula as contas de demonstração de forma idempotente. |
-| `db/004_instagram.sql` | Adiciona campos de conexão OAuth do Instagram e ids/URL da publicação real. |
+| `db/001_auth.sql` | Cria/completa `usuarios` e `reset_tokens`; mapeia papéis antigos para `curador`/`ouvinte`. |
+| `db/002_dominio.sql` | Cria `musicas`, `playlists`, `playlist_musicas`, `compartilhamentos`, `assinaturas`. |
+| `db/003_seed.sql` | Popula as contas de demonstração, músicas demo, playlist e compartilhamentos. |
 
 ---
 
 ## Isolamento por usuário
 
-A regra não está na tela. Ela está em [`src/routes/posts.ts`](src/routes/posts.ts):
+A regra não está na tela. Ela está em [`src/routes/musicas.ts`](src/routes/musicas.ts) e [`src/routes/playlists.ts`](src/routes/playlists.ts):
 
 ```ts
-function podeLer(post, usuarioId, role) {
-  return role === "admin" || post.usuarioId === usuarioId || post.clienteId === usuarioId;
+// Leitura: admin, dono, ou alguém liberou explicitamente para você.
+async function podeLer(musica, usuarioId, role) {
+  if (role === "admin" || musica.usuarioId === usuarioId) return true;
+  const ids = await idsCompartilhadosCom(usuarioId); // direto ou via playlist
+  return ids.includes(musica.id);
 }
 ```
 
-- `admin` vê todos os posts.
-- `social_media` vê apenas os próprios.
-- `cliente` vê apenas os posts em que foi atribuído.
-- Qualquer outro caso: **403**, mesmo com o ID correto na mão.
+- `admin` vê tudo.
+- `curador` vê as próprias faixas + as que compartilharem com ele.
+- `ouvinte` vê apenas o que foi compartilhado com ele.
+- Qualquer outro caso: **403**, mesmo com o ID correto na mão. O mesmo ID que
+  aparece em `/api/musicas/123` devolve 403 para quem não é dono nem ouvinte
+  liberado, e 404 quando o recurso não existe.
 
-Abrir `https://mateus-pereira-isw055.lapps.studio/painel?post=<id de outra pessoa>`
-mostra a mensagem de acesso negado; a API chamada por trás devolve 403. O mesmo
-vale para mídia: os bytes só saem por
-`GET /api/posts/:id/midia/:midiaId/arquivo`, depois da checagem de dono.
+O áudio nunca sai sem checagem: `GET /api/musicas/:id/stream` e
+`GET /api/musicas/:id/download` autenticam (header `Authorization` ou `?token=`
+para a tag `<audio>`), revalidam a visibilidade e só então devolvem os bytes.
 
 ---
 
@@ -257,73 +263,57 @@ Stream `auditoria:eventos` com **quem, quando e o quê**:
 
 | Ação | Quando acontece |
 | --- | --- |
-| `post_criado` | Um post é criado. |
-| `post_editado` | Título, legenda, data, conta ou status mudam. |
-| `post_aprovado` | O cliente atribuído aprova. |
-| `post_ajustes_solicitados` | O cliente pede ajustes. |
-| `post_publicado` | O post é marcado como publicado. |
-| `post_removido` | O post e suas mídias são apagados. |
-| `midia_enviada` / `midia_removida` | Upload/remoção no MinIO. |
+| `musica_adicionada` | Uma música é criada a partir de uma URL. |
+| `musica_pronta` | A extração do áudio terminou e o arquivo está no MinIO. |
+| `extracao_falhou` | yt-dlp/ffmpeg falhou; `erro_msg` guarda o motivo. |
+| `musica_editada` | Título/artista mudam. |
+| `musica_removida` | Faixa, capa e relações são apagados. |
+| `musica_reproduzida` / `musica_baixada` | Stream no player / download do `.m4a`. |
+| `musica_compartilhada` / `musica_descompartilhada` | Liberação/revogação para um ouvinte. |
+| `playlist_criada` / `playlist_editada` / `playlist_removida` | Ciclo de vida da playlist. |
+| `playlist_musica_adicionada` / `playlist_musica_removida` | Curadoria das faixas. |
+| `playlist_compartilhada` / `playlist_descompartilhada` | Playlist liberada/revogada. |
 | `acao_negada` | Qualquer resposta 403 (com permissão exigida e papel). |
 | `login` / `login_falhou` / `logout` | Acesso à conta. |
 | `alterar_papel` | Admin promove/rebaixa alguém. |
-| `assinatura_ativada` / `assinatura_cancelada` | Webhook do Stripe. |
+| `assinatura_pro_ativada` / `assinatura_pro_cancelada` | Webhook do Stripe. |
 
 O admin consulta os últimos eventos em **Painel → Auditoria** ou por
-`GET /api/logs?limite=100`. O evento tem o formato:
-
-```json
-{
-  "id": "1794596123456-0",
-  "timestamp": "2026-11-13T18:15:23.456Z",
-  "acao": "post_aprovado",
-  "usuario_id": 66,
-  "usuario": "Cliente Exemplo",
-  "papel": "cliente",
-  "recurso": "post:1",
-  "detalhe": "Conteúdo aprovado, pode publicar.",
-  "ip": "203.0.113.10",
-  "origem": "app"
-}
-```
+`GET /api/logs?limite=100`.
 
 ---
 
-## Integração real com o Instagram
-
-A conexão de conta usa o fluxo oficial da Meta:
-
-1. O usuário autenticado chama `GET /api/instagram/conectar` e o app devolve a URL do diálogo OAuth (state assinado com HMAC e validade de 10 minutos).
-2. A Meta redireciona para `GET /api/instagram/callback` (público), onde o `code` é trocado por token, o token é estendido e as Páginas com `instagram_business_account` são descobertas.
-3. O token da Página é **cifrado com AES-256-GCM** (`APP_ENCRYPTION_KEY`) e salvo em `contas_sociais.access_token_cifrado`; nenhuma API devolve esse campo.
-4. Ao publicar, o app gera uma URL pública assinada da mídia (`/api/midia-publica/:id?exp=&sig=`), cria o container na Graph API, aguarda `FINISHED` e chama `media_publish`, gravando `instagram_media_id` e `publicado_url` no post.
-
-Variáveis necessárias:
-
-- `META_APP_ID`, `META_APP_SECRET`
-- `META_REDIRECT_URI` (padrão: `<APP_PUBLIC_URL>/api/instagram/callback`)
-- `META_GRAPH_VERSION` (padrão: `v22.0`)
-- `APP_ENCRYPTION_KEY` (fixo; trocar invalida tokens já cifrados)
-
-Sem credenciais, o endpoint `/api/instagram/conectar` responde 503 e contas manuais continuam operando como simulação explícita.
-
 ## Mídia no MinIO
 
-- Bucket: `metasass-midias` (criado automaticamente no boot).
-- Chave do objeto: `posts/<usuario_id>/<post_id>/<timestamp>-<arquivo>`.
-- O MariaDB guarda **somente a chave** em `midias`; o binário não entra no banco.
-- O upload é `multipart/form-data` no campo `arquivo`, ligado ao post pelo
-  `post_id` da rota; a validação confere dono do post, tipo e magic bytes.
-- O navegador nunca fala com o MinIO: a leitura passa por uma rota autenticada.
-- Limite padrão: 5 MB por imagem (`TAMANHO_MAX_MIDIA_MB`).
+- Bucket: `riff-midias` (criado automaticamente no boot).
+- Chave do áudio: `musicas/<usuario_id>/<musica_id>/<timestamp>-audio.m4a`.
+- Chave da capa: `capas/<usuario_id>/<musica_id>/<timestamp>-capa.<ext>`.
+- O MariaDB guarda **somente as chaves** em `musicas`; o binário não entra no banco.
+- O navegador nunca fala com o MinIO: leitura/download passam por rotas
+  autenticadas que conferem dono ou compartilhamento antes de devolver os bytes.
+
+## Extração com yt-dlp
+
+1. `POST /api/musicas { url }` valida a URL (somente YouTube:
+   `watch`, `youtu.be`, `shorts`), cria o registro com `status = 'processando'`
+   e responde `201`.
+2. Em background, o worker roda `yt-dlp --dump-single-json` para metadados,
+   `yt-dlp -x --audio-format m4a` para o áudio e baixa a thumbnail.
+3. O áudio/capa sobem para o MinIO; o registro vira `status = 'pronta'` com
+   `chave_audio`, `chave_capa`, `duracao_seg` e `tamanho`.
+4. Se algo falhar, o registro vira `status = 'erro'` com `erro_msg`, e a tela
+   de detalhe oferece **Reprocessar** (`POST /api/musicas/:id/reprocessar`).
+
+O plano gratuito inclui até **10 músicas** (`LIMITE_MUSICAS_GRATIS`); no Pro a
+extração é ilimitada.
 
 ---
 
 ## Plano gratuito e plano Pro
 
-- **Gratuito:** até **5 posts** (`LIMITE_POSTS_GRATIS`). A checagem é no
-  servidor: a sexta criação responde 403 com o limite no corpo.
-- **Pro:** posts ilimitados, cobrado pelo Stripe Checkout (página hospedada).
+- **Gratuito:** até **10 músicas** (`LIMITE_MUSICAS_GRATIS`). A checagem é no
+  servidor: a décima primeira criação responde `402` com o limite no corpo.
+- **Pro:** músicas ilimitadas, cobrado pelo Stripe Checkout (página hospedada).
   O webhook do Stripe chega no `app`, que pede ao `auth-service` para marcar
   `usuarios.premium`. Nenhum dado de cartão passa pelo backend.
 - Sem chaves do Stripe configuradas, o checkout responde 503 e o restante do
@@ -340,41 +330,48 @@ Todas as rotas abaixo, exceto login/cadastro/health, exigem
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| `POST` | `/api/register` | Cadastro (nasce `social_media`). |
+| `POST` | `/api/register` | Cadastro (nasce `curador`). |
 | `POST` | `/api/login` | Login, devolve JWT. |
 | `POST` | `/api/logout` | Registra o logout na auditoria. |
 | `GET` | `/api/me` | Perfil + lista de permissões. |
 | `POST` | `/api/forgot-password` | Envia link de redefinição. |
 | `POST` | `/api/reset-password` | Troca a senha com token. |
 
-### Recurso principal: posts
+### Recurso principal: músicas
 
 | Método | Rota | Permissão | Descrição |
 | --- | --- | --- | --- |
-| `GET` | `/api/posts` | `ler:post` | Lista conforme a visibilidade do papel. |
-| `POST` | `/api/posts` | `criar:post` | Cria o post (dono vem do token). |
-| `GET` | `/api/posts/:id` | `ler:post` | Detalhe + mídias + aprovações + permissões. |
-| `PATCH` | `/api/posts/:id` | `editar:post` | Edita título, legenda, data, conta ou status. |
-| `DELETE` | `/api/posts/:id` | `apagar:post` | Apaga post, mídias e objetos do MinIO. |
-| `POST` | `/api/posts/:id/publicar` | `publicar:post` | Publica no Instagram via Graph API quando a conta foi conectada por OAuth; conta manual fica como simulação auditada. |
-| `POST` | `/api/posts/:id/aprovar` | `aprovar:post` | Cliente aprova ou pede ajustes. |
-| `POST` | `/api/posts/:id/midia` | `enviar:midia` | Upload de imagem. |
-| `GET` | `/api/posts/:id/midia/:midiaId/arquivo` | `ler:post` | Serve a imagem com checagem de dono. |
-| `DELETE` | `/api/posts/:id/midia/:midiaId` | `enviar:midia` | Remove a mídia. |
+| `GET` | `/api/musicas` | `ler:musica` | Lista conforme a visibilidade do papel. |
+| `POST` | `/api/musicas` | `criar:musica` | Adiciona por URL (extração assíncrona). |
+| `GET` | `/api/musicas/:id` | `ler:musica` | Detalhe + compartilhamentos (dono/admin). |
+| `PATCH` | `/api/musicas/:id` | `editar:musica` | Edita título/artista. |
+| `DELETE` | `/api/musicas/:id` | `apagar:musica` | Apaga faixa, capa e relações. |
+| `POST` | `/api/musicas/:id/reprocessar` | `editar:musica` | Refaz a extração de uma faixa com erro. |
+| `GET` | `/api/musicas/:id/stream` | `ler:musica` | Player (header ou `?token=`). |
+| `GET` | `/api/musicas/:id/download` | `ler:musica` | Download do `.m4a`. |
+| `GET` | `/api/musicas/:id/capa` | `ler:musica` | Capa do álbum. |
+| `POST` | `/api/musicas/:id/compartilhar` | `compartilhar:musica` | Libera para um ouvinte. |
+| `DELETE` | `/api/musicas/:id/compartilhar/:usuarioId` | `compartilhar:musica` | Revoga o acesso. |
+| `GET` | `/api/musicas/compartilhaveis` | `compartilhar:musica` | Lista os ouvintes do workspace. |
 
-### Contas sociais, usuários, logs e plano
+### Playlists
+
+| Método | Rota | Permissão | Descrição |
+| --- | --- | --- | --- |
+| `GET` | `/api/playlists` | autenticado | Minhas (admin: todas) + compartilhadas comigo. |
+| `POST` | `/api/playlists` | `gerenciar:playlist` | Cria playlist. |
+| `GET` | `/api/playlists/:id` | autenticado* | Detalhe + faixas (*dono, admin ou liberada). |
+| `PATCH` | `/api/playlists/:id` | `gerenciar:playlist` | Renomeia/edita. |
+| `DELETE` | `/api/playlists/:id` | `gerenciar:playlist` | Apaga a playlist. |
+| `POST` | `/api/playlists/:id/musicas` | `gerenciar:playlist` | Adiciona faixa. |
+| `DELETE` | `/api/playlists/:id/musicas/:musicaId` | `gerenciar:playlist` | Remove faixa. |
+| `POST` | `/api/playlists/:id/compartilhar` | `compartilhar:musica` | Libera para um ouvinte. |
+| `DELETE` | `/api/playlists/:id/compartilhar/:usuarioId` | `compartilhar:musica` | Revoga o acesso. |
+
+### Usuários, logs e plano
 
 | Método | Rota | Permissão |
 | --- | --- | --- |
-| `GET` | `/api/contas-sociais` | autenticado |
-| `POST` | `/api/contas-sociais` | `gerenciar:contas` |
-| `PATCH` | `/api/contas-sociais/:id` | `gerenciar:contas` |
-| `DELETE` | `/api/contas-sociais/:id` | `gerenciar:contas` |
-| `GET` | `/api/instagram/status` | autenticado |
-| `GET` | `/api/instagram/conectar` | `gerenciar:contas` |
-| `GET` | `/api/instagram/callback` | público (state assinado) |
-| `POST` | `/api/instagram/:id/desconectar` | `gerenciar:contas` |
-| `GET` | `/api/midia-publica/:midiaId` | público (assinatura + expiração) |
 | `GET` | `/api/usuarios` | `listar:usuarios` |
 | `PATCH` | `/api/usuarios/:id/role` | `alterar:papel` |
 | `GET` | `/api/logs?limite=N` | `consultar:logs` |
@@ -400,12 +397,19 @@ export DB_HOST=... DB_PORT=3306 DB_USER=... DB_PASSWORD=... DB_NAME=...
 bun run db:migrate
 bun run db:seed
 
-# 3. serviços localmente (três terminais)
+# 3. frontend (uma vez)
+(cd web && bun install && bun run build)
+
+# 4. serviços localmente (três terminais)
 cd auth-service && APP_PUBLIC_URL=http://localhost:8222 JWT_SECRET=dev \
   DB_HOST=... DB_USER=... DB_PASSWORD=... DB_NAME=... bun run dev
 cd log-service && REDIS_URL=redis://localhost:6379 bun run dev
 bun run dev   # app em http://localhost:8222
 ```
+
+Para a extração com yt-dlp funcionar, `yt-dlp` e `ffmpeg` precisam estar no
+PATH (a imagem Docker já os instala). Sem eles, a música fica com
+`status = 'erro'` e a tela oferece reprocessar.
 
 Com Docker:
 
@@ -415,10 +419,6 @@ docker compose up -d --build
 docker compose ps
 ```
 
-O banco é externo ao compose (MariaDB da disciplina), como nas atividades
-anteriores. O compose sobe `app`, `auth-service`, `log-service`, `redis` e
-`minio`; apenas o `app` publica a porta `8222`.
-
 ---
 
 ## Migrations e seed
@@ -427,12 +427,14 @@ anteriores. O compose sobe `app`, `auth-service`, `log-service`, `redis` e
 # aplica db/000, db/001 e db/002 em ordem (idempotente)
 bun run db:migrate
 
-# popula contas, contas sociais, posts e aprovações de demonstração
+# popula contas, músicas demo, playlist e compartilhamentos
 bun run db:seed
 ```
 
 - `db:migrate` executa `db/*.sql` em ordem e ignora "já existia".
-- `db:seed` executa `db/003_seed.sql`; pode rodar de novo sem duplicar dados.
+- `db:seed` executa `db/003_seed.sql` (**e envia os áudios demo ao MinIO**,
+  chaves `demo/*.wav`, quando o seed enxerga o MinIO — ex.: dentro da rede
+  Docker); pode rodar de novo sem duplicar dados.
 - Para recriar do zero em um banco vazio, basta rodar os dois comandos.
 - O histórico do projeto anterior continua no repositório
   [`filmes-tom-hanks`](https://github.com/mateussantospereira/filmes-tom-hanks),
@@ -445,17 +447,16 @@ bun run db:seed
 
 | Papel | E-mail | Senha | O que demonstra |
 | --- | --- | --- | --- |
-| `admin` | `admin@metasass.app` | `Admin@123` | Vê tudo, gerencia usuários e auditoria, plano Pro. |
-| `social_media` | `social@metasass.app` | `Social@123` | Cria/edita/publica os próprios posts, envia mídia. |
-| `cliente` | `cliente@metasass.app` | `Cliente@123` | Lê e aprova apenas os posts atribuídos a ele. |
+| `admin` | `admin@riff.app` | `Admin@123` | Vê tudo, gerencia usuários e auditoria, plano Pro. |
+| `curador` | `curador@riff.app` | `Curador@123` | Cria músicas, playlists e compartilhamentos. |
+| `ouvinte` | `ouvinte@riff.app` | `Ouvinte@123` | Só ouve/baixa o que foi liberado para ele. |
 
 O seed também cria:
 
-- 2 contas sociais da `social_media` (Instagram e Facebook);
-- 1 conta social do `admin` (usada para provar o isolamento);
-- 3 posts da `social_media` (aprovado, ajustes e publicado);
-- 1 post do `admin` (o `social_media` recebe 403 ao abrir pelo ID);
-- histórico de aprovação do cliente.
+- 2 músicas demo do `curador` (arquivos em `seed-audio/`, enviados ao MinIO como `demo/*.wav`);
+- 1 música demo do `admin` (o `curador` recebe 403 ao abrir pelo ID);
+- a playlist **"Estudo e Concentração"** com 2 faixas;
+- compartilhamento da playlist **e** de uma faixa avulsa com o ouvinte.
 
 ---
 
@@ -473,21 +474,22 @@ subdomínio e o mesmo modelo de variáveis de ambiente:
 
 Procedimento:
 
-1. No Portainer, abra o stack 22 → **Editor**.
-2. Troque a URL do repositório para
-   `https://github.com/mateussantospereira/meta-sass.git`.
-3. Confira as variáveis de ambiente (as mesmas do `.env.example`).
-4. **Update the stack** / **Redeploy**.
-5. Rode as migrations pelo console do container `app`:
+1. Build das imagens a partir deste repositório (ex.: via API do Docker do Portainer).
+2. No Portainer, stack 22 → **Editor**; troque `image: metasass-app:latest` por
+   `image: riff-app:latest` (e `riff-auth`, `riff-log`), ajuste
+   `MINIO_BUCKET=riff-midias` e remova variáveis do domínio anterior
+   (`META_*`).
+3. **Update the stack** (recria os containers).
+4. Rode as migrations pelo console do container `app`:
    ```bash
    bun run db:migrate && bun run db:seed
    ```
-6. Confira `docker compose ps`: `app`, `auth-service`, `log-service` e `redis`
-   devem ficar `healthy`.
+5. Confira a stack: `app`, `auth-service`, `log-service` e `redis` devem ficar
+   `healthy`.
 
-O deploy anterior (catálogo de filmes) não é apagado: o repositório antigo
-continua público e o histórico Git preserva o código. O que muda é o stack 22
-apontar para este repositório e o banco deixar de ter as tabelas antigas.
+O deploy anterior não é apagado: o repositório antigo continua público e o
+histórico Git preserva o código. O que muda é o stack 22 apontar para este
+repositório e o banco deixar de ter as tabelas antigas.
 
 ---
 
@@ -500,17 +502,18 @@ apontar para este repositório e o banco deixar de ter as tabelas antigas.
 │   ├── 001_auth.sql
 │   ├── 002_dominio.sql
 │   └── 003_seed.sql
+├── seed-audio/               # áudios de demonstração (.wav) enviados ao MinIO pelo seed
 ├── src/
-│   ├── index.ts              # app Hono: páginas + API + boot do MinIO
+│   ├── index.ts              # app Hono: API + estáticos da SPA + boot do MinIO
 │   ├── db/                   # schema Drizzle, migrate e seed
 │   ├── middleware/           # autenticação, permissão e auditoria de 403
-│   ├── routes/               # posts, contas sociais, usuários, logs, plano
-│   ├── services/             # clientes auth/log/MinIO/Stripe e regra de plano
-│   └── public/               # landing, login, painel, reset, CSS e JS
+│   ├── routes/               # musicas, playlists, usuários, logs, plano, auth
+│   └── services/             # clientes auth/log/MinIO/Stripe, yt-dlp, plano
+├── web/                      # SPA React + Tailwind (landing, biblioteca, player, playlists, admin)
 ├── auth-service/             # identidade, papéis e permissões (porta interna 3000)
 ├── log-service/              # auditoria em Redis Streams (porta interna 3000)
 ├── docs/prints/              # evidências visuais da entrega
-├── Dockerfile                # app
+├── Dockerfile                # app (multi-stage: build web + runtime com yt-dlp/ffmpeg)
 ├── docker-compose.yml        # 5 serviços, 1 porta pública
 └── .env.example
 ```
@@ -519,22 +522,28 @@ apontar para este repositório e o banco deixar de ter as tabelas antigas.
 
 ## Decisões de projeto
 
-- **Bun + Hono + HTML/JS renderizado no servidor.** O domínio é simples e o
-  objetivo é mostrar o fluxo completo (CRUD, papéis, isolamento, mídia,
-  auditoria) sem esconder a regra atrás de um framework de frontend.
+- **React + Tailwind no frontend, Hono no backend.** A SPA (`web/`, estilo
+  shadcn) compila para estático e é servida pelo próprio `app` — uma origem,
+  zero CORS, nenhum ponto de entrada extra.
 - **O frontend não é a autoridade.** Ele esconde botões para melhorar a
   experiência, mas toda ação é revalidada no servidor. O 403 é a resposta
   canônica para "seu papel não permite", e ele também vira evento de auditoria.
+- **Isolamento por construção.** `podeLer`/`ehDono` são as únicas portas; não
+  existe consulta que "esqueça" o filtro, e o compartilhamento é uma tabela
+  explícita, não um booleano solto.
+- **Extração assíncrona, não request bloqueante.** yt-dlp pode demorar; a API
+  responde `201` na hora e o cliente acompanha o `status` da música.
 - **Preço e limite são regras de negócio, não de pagamento.** O Stripe cobra;
-  o app decide o que o plano gratuito pode fazer (`LIMITE_POSTS_GRATIS`).
+  o app decide o que o plano gratuito pode fazer (`LIMITE_MUSICAS_GRATIS`).
 - **MinIO é interno.** O binário nunca é servido diretamente ao navegador; a
-  rota de leitura confere o dono do post antes de devolver os bytes.
+  rota de leitura confere o dono ou o compartilhamento antes de devolver os bytes.
 - **Falha de serviço de apoio não derruba o produto.** Se o `auth-service`
   cair, o app responde 503 nas rotas autenticadas e continua servindo a landing.
   Se o MinIO cair, os uploads respondem 503 e o CRUD continua.
 - **Papel desconhecido cai para o menor privilégio.** Um valor corrompido em
-  `usuarios.role` vira `cliente`, nunca `admin`.
+  `usuarios.role` vira `ouvinte`, nunca `admin`.
 
 ---
 
-Feito com Bun, Hono, Drizzle, MariaDB, Redis Streams, MinIO, Docker e Portainer.
+Feito com Bun, Hono, React, Tailwind, Drizzle, MariaDB, Redis Streams, MinIO,
+yt-dlp, Docker e Portainer.
