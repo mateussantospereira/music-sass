@@ -27,6 +27,7 @@ export function MusicaDetalhe() {
 
   const [dados, setDados] = React.useState<Detalhe | null>(null);
   const [naoEncontrada, setNaoEncontrada] = React.useState(false);
+  const [semAcesso, setSemAcesso] = React.useState(false);
   const [editando, setEditando] = React.useState(false);
   const [titulo, setTitulo] = React.useState("");
   const [artista, setArtista] = React.useState("");
@@ -38,6 +39,7 @@ export function MusicaDetalhe() {
   const carregar = React.useCallback(async () => {
     const { ok, status, data } = await api<Detalhe>(`/api/musicas/${musicaId}`);
     if (status === 404) return setNaoEncontrada(true);
+    if (status === 403) return setSemAcesso(true);
     if (ok && data) setDados(data);
   }, [musicaId]);
 
@@ -78,11 +80,11 @@ export function MusicaDetalhe() {
     carregar();
   }
 
-  if (naoEncontrada) {
+  if (semAcesso || naoEncontrada) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <h1 className="font-display text-2xl font-bold">Música não encontrada</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Ela pode ter sido removida — ou nunca foi sua.</p>
+        <h1 className="font-display text-2xl font-bold">{semAcesso ? "Você não tem acesso a esta faixa" : "Música não encontrada"}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{semAcesso ? "Esta música não está na sua biblioteca. O servidor recusou a leitura (403) — a tela não muda isso." : "Ela pode ter sido removida — ou nunca foi sua."}</p>
         <Link to="/painel/biblioteca" className="mt-6 inline-block"><Button variant="outline"><ArrowLeft size={16} /> Voltar para a biblioteca</Button></Link>
       </div>
     );

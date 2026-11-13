@@ -28,6 +28,7 @@ export function PlaylistDetalhe() {
 
   const [dados, setDados] = React.useState<TPlaylistDetalhe | null>(null);
   const [naoEncontrada, setNaoEncontrada] = React.useState(false);
+  const [semAcesso, setSemAcesso] = React.useState(false);
   const [editando, setEditando] = React.useState(false);
   const [nome, setNome] = React.useState("");
   const [descricao, setDescricao] = React.useState("");
@@ -40,6 +41,7 @@ export function PlaylistDetalhe() {
   const carregar = React.useCallback(async () => {
     const { ok, status, data } = await api<TPlaylistDetalhe>(`/api/playlists/${playlistId}`);
     if (status === 404) return setNaoEncontrada(true);
+    if (status === 403) return setSemAcesso(true);
     if (ok && data) setDados(data);
   }, [playlistId]);
 
@@ -86,11 +88,11 @@ export function PlaylistDetalhe() {
     carregar();
   }
 
-  if (naoEncontrada) {
+  if (semAcesso || naoEncontrada) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <h1 className="font-display text-2xl font-bold">Playlist não encontrada</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Ela pode ter sido removida — ou não foi compartilhada com você.</p>
+        <h1 className="font-display text-2xl font-bold">{semAcesso ? "Você não tem acesso a esta playlist" : "Playlist não encontrada"}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{semAcesso ? "O servidor recusou a leitura (403). Peça ao dono para compartilhar com você." : "Ela pode ter sido removida — ou não foi compartilhada com você."}</p>
         <Link to="/painel/playlists" className="mt-6 inline-block"><Button variant="outline"><ArrowLeft size={16} /> Voltar para playlists</Button></Link>
       </div>
     );
