@@ -133,6 +133,16 @@ export const compartilhamentos = mysqlTable(
   ]
 );
 
+/** Idempotência de webhooks: um evento do Stripe processado uma única vez. */
+export const stripeEventos = mysqlTable(
+  "stripe_eventos",
+  {
+    id: varchar("id", { length: 128 }).primaryKey(),
+    tipo: varchar("tipo", { length: 80 }).notNull(),
+    processadoEm: timestamp("processado_em").defaultNow(),
+  }
+);
+
 /**
  * Assinatura do plano Pro. O direito (`usuarios.premium`) mora no
  * auth-service; aqui ficam só os IDs devolvidos pelo Stripe.

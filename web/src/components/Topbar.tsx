@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LogOut, ShieldCheck, ListMusic, Library, PlusCircle, Sparkles, Users, ScrollText, Eraser } from "lucide-react";
+import { LogOut, ShieldCheck, ListMusic, Library, PlusCircle, Sparkles, Users, ScrollText, Eraser, Banknote } from "lucide-react";
 import { Logo } from "./LogoMark";
 import { useAuth } from "../lib/auth";
 import { usePlayer } from "../lib/player";
@@ -16,6 +16,7 @@ const LINKS = [
   { to: "/painel/plano", label: "Plano", icone: Sparkles, perm: null },
   { to: "/painel/usuarios", label: "Usuários", icone: Users, perm: "listar:usuarios" },
   { to: "/painel/logs", label: "Auditoria", icone: ScrollText, perm: "consultar:logs" },
+  { to: "/painel/faturamento", label: "Faturamento", icone: Banknote, perm: "ver:faturamento" },
 ] as const;
 
 export function Topbar() {

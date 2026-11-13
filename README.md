@@ -27,7 +27,7 @@ comercial gratuito/Pro.
 - [Eventos de negócio (auditoria)](#eventos-de-negócio-auditoria)
 - [Mídia no MinIO](#mídia-no-minio)
 - [Extração de áudio](#extração-de-áudio)
-- [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro)
+- [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro-assinatura-recorrente)
 - [API](#api)
 - [Como rodar](#como-rodar)
 - [Migrations e seed](#migrations-e-seed)
@@ -127,6 +127,7 @@ da regra no frontend nem nas rotas.
 | `listar:usuarios` | ✅ | — | — |
 | `alterar:papel` | ✅ | — | — |
 | `consultar:logs` | ✅ | — | — |
+| `ver:faturamento` | ✅ | — | — |
 
 - Todo cadastro novo nasce como **`curador`**. Virar `ouvinte` ou `admin`
   é uma decisão administrativa (`PATCH /api/usuarios/:id/role`).
@@ -226,6 +227,7 @@ Arquivos de migration:
 | `db/000_limpar_legado.sql` | Remove tabelas do projeto anterior (explícito e separado). |
 | `db/001_auth.sql` | Cria/completa `usuarios` e `reset_tokens`; mapeia papéis antigos para `curador`/`ouvinte`. |
 | `db/002_dominio.sql` | Cria `musicas`, `playlists`, `playlist_musicas`, `compartilhamentos`, `assinaturas`. |
+| `db/004_assinatura.sql` | Tabela `stripe_eventos` (idempotência dos webhooks). |
 | `db/003_seed.sql` | Popula as contas de demonstração, músicas demo, playlist e compartilhamentos. |
 
 ---
@@ -327,15 +329,84 @@ extração é ilimitada.
 
 ---
 
-## Plano gratuito e plano Pro
+## Plano gratuito e plano Pro (assinatura recorrente)
 
-- **Gratuito:** até **10 músicas** (`LIMITE_MUSICAS_GRATIS`). A checagem é no
-  servidor: a décima primeira criação responde `402` com o limite no corpo.
-- **Pro:** músicas ilimitadas, cobrado pelo Stripe Checkout (página hospedada).
-  O webhook do Stripe chega no `app`, que pede ao `auth-service` para marcar
-  `usuarios.premium`. Nenhum dado de cartão passa pelo backend.
-- Sem chaves do Stripe configuradas, o checkout responde 503 e o restante do
-  produto continua funcionando no plano gratuito.
+Modelo de receita do produto:
+
+| Plano | Preço | Limite |
+| --- | --- | --- |
+| Gratuito | R$ 0,00 | 10 músicas (`LIMITE_MUSICAS_GRATIS`) |
+| Pro | R$ 29,00/mês | sem limite |
+
+**Modo de teste, sempre.** Cobrança real não existe neste projeto. O Stripe
+roda em test mode: chaves começam com `sk_test_`/`whsec_` e o cartão da
+demonstração é `4242 4242 4242 4242` (qualquer validade futura, qualquer CVC).
+Nenhum dado de cartão passa pelo backend — o checkout é a página hospedada do
+Stripe.
+
+### Ciclo de vida da assinatura
+
+O plano do usuário é um **estado mantido pelos webhooks do Stripe**, não pelo
+redirect do checkout e não pela tela. Fluxo:
+
+```text
+Free → Checkout (mode=subscription) → Stripe cobra todo mês
+     → webhook assinado e validado  → cria/atualiza `assinaturas`
+     → auth-service marca usuarios.premium → limite some da API
+     → Portal do cliente: troca de plano / cancelamento
+     → customer.subscription.deleted → volta para o Free
+```
+
+O `app` abre caminhos (checkout e portal). Quem muda o plano no banco é sempre
+o webhook, que chega por fora a qualquer hora — e pode chegar mais de uma vez,
+por isso o `app` grava o `id` de cada evento em `stripe_eventos` e não
+processa o mesmo evento duas vezes (sem efeito duplicado em reenvios).
+
+### Eventos tratados e o que mudam no banco
+
+| Evento | Quando chega | O que o app faz |
+| --- | --- | --- |
+| `checkout.session.completed` | Checkout da assinatura concluído | Grava `stripe_customer_id` e `stripe_subscription_id` em `assinaturas`, marca `status = ativa`, plano Pro e `usuarios.premium = TRUE` (via auth-service) |
+| `customer.subscription.updated` | Troca de plano, renovação, mudança de status | Atualiza `assinaturas.status` (active, past_due, canceled…); mantém ou retira o Pro conforme `status` (`active`/`trialing` ⇒ Pro) |
+| `customer.subscription.deleted` | Assinatura terminada | `status = cancelada` e `usuarios.premium = FALSE` — a conta volta para o Free |
+| `invoice.payment_failed` | A cobrança da renovação falhou | `status = inadimplente` e `usuarios.premium = FALSE`; evento `assinatura_pro_inadimplente` na auditoria com quem, quando e o motivo. O Pro não continua de graça |
+
+Limites valem **na API**: a décima primeira música do Free responde `402` com
+uma mensagem clara — o limite do plano vale no servidor, não na tela.
+
+### Configurar (modo de teste)
+
+No painel do Stripe (test mode):
+
+1. **Products** → cadastre **Riff Pro** com preço recorrente mensal de R$ 29,00.
+   Copie o `price_…` (vai para `STRIPE_PRICE_ID`). O Free pode ter preço R$ 0,00.
+2. **Developers → API keys** → copie a *Secret key* (vai para `STRIPE_SECRET_KEY`).
+3. **Developers → Webhooks** → adicione
+   `https://mateus-pereira-isw055.lapps.studio/api/plano/webhook`
+   com os eventos `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted` e `invoice.payment_failed`.
+   Copie o *Signing secret* (vai para `STRIPE_WEBHOOK_SECRET`).
+4. **Settings → Billing → Customer portal** → salve a configuração do portal
+   (o link volta para `/painel/plano`).
+5. As chaves ficam **somente nas variáveis da stack no Portainer** — nunca no
+   repositório. O `.env.example` lista apenas os nomes.
+
+Para testar de ponta a ponta: crie uma conta nova (nasce Free), estoure o
+limite do Free (a API recusa), assine o Pro com o cartão de teste, veja o
+webhook chegar no painel do Stripe e no log de auditoria — o plano vira Pro e
+o limite some. Abra **Gerenciar assinatura** (Billing Portal) e cancele;
+quando o webhook do cancelamento chega, a conta volta para o Free.
+
+### Painel de faturamento (admin)
+
+Rota `/painel/faturamento`, exclusiva de quem tem `ver:faturamento` (admin):
+quantos usuários estão em cada plano, quantas assinaturas estão ativas /
+inadimplentes / canceladas, o **MRR** em modo de teste (assinaturas ativas ×
+valor mensal do Price) e os últimos 5 eventos do log de auditoria.
+
+Sem chaves do Stripe configuradas, o checkout responde 503 e o restante do
+produto continua funcionando no plano gratuito — inclusive o painel (mostra os
+números que vêm do banco, com o Stripe sinalizado como não configurado).
 
 ---
 
@@ -394,7 +465,9 @@ Todas as rotas abaixo, exceto login/cadastro/health, exigem
 | `GET` | `/api/logs?limite=N` | `consultar:logs` |
 | `GET` | `/api/plano/status` | autenticado |
 | `POST` | `/api/plano/checkout` | autenticado |
+| `POST` | `/api/plano/portal` | autenticado (dono da assinatura) |
 | `POST` | `/api/plano/webhook` | assinatura do Stripe |
+| `GET` | `/api/plano/resumo` | `ver:faturamento` (admin) |
 | `GET` | `/api/health` | público |
 
 ---

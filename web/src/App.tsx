@@ -14,6 +14,7 @@ import { PlaylistDetalhe } from "./pages/PlaylistDetalhe";
 import { Plano } from "./pages/Plano";
 import { AdminUsuarios } from "./pages/AdminUsuarios";
 import { AdminLogs } from "./pages/AdminLogs";
+import { AdminFaturamento } from "./pages/AdminFaturamento";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
                 <Route path="adicionar" element={<Adicionar />} />
                 <Route path="plano" element={<Plano />} />
                 <Route path="usuarios" element={<AdminUsuarios />} />
+                <Route path="faturamento" element={<AdminFaturamento />} />
                 <Route path="logs" element={<AdminLogs />} />
               </Route>
 

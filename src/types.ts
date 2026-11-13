@@ -14,7 +14,8 @@ export type Permissao =
   | "compartilhar:musica"
   | "listar:usuarios"
   | "alterar:papel"
-  | "consultar:logs";
+  | "consultar:logs"
+  | "ver:faturamento";
 
 /**
  * Dados que o middleware de autenticação deixa no contexto. Tudo veio do

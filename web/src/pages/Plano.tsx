@@ -1,12 +1,14 @@
 import * as React from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { Check, CreditCard, Minus, Sparkles } from "lucide-react";
+import { Check, CreditCard, Minus, Settings, Sparkles } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../components/ui/toast";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
+
+type AssinaturaInfo = { status: string; plano: string; atualizadoEm?: string };
 
 type StatusPlano = {
   premium: boolean;
@@ -16,6 +18,7 @@ type StatusPlano = {
   restantes: number | null;
   preco: string;
   stripeConfigurado: boolean;
+  assinatura: AssinaturaInfo | null;
 };
 
 export function Plano() {
@@ -25,6 +28,7 @@ export function Plano() {
   const [status, setStatus] = React.useState<StatusPlano | null>(null);
   const [carregando, setCarregando] = React.useState(true);
   const [redirecionando, setRedirecionando] = React.useState(false);
+  const [abrindoPortal, setAbrindoPortal] = React.useState(false);
 
   React.useEffect(() => {
     api<StatusPlano>("/api/plano/status").then(({ ok, data }) => {
@@ -36,8 +40,9 @@ export function Plano() {
   React.useEffect(() => {
     const checkout = params.get("checkout");
     if (!checkout) return;
-    toast(checkout === "sucesso" ? "ok" : "info",
-      checkout === "sucesso" ? "Assinatura confirmada! O Pro será ativado pelo webhook em instantes." : "Checkout cancelado. Nenhuma cobrança foi feita.");
+    if (checkout === "sucesso") toast("ok", "Assinatura confirmada! O Pro será ativado pelo webhook em instantes.");
+    else if (checkout === "portal") toast("ok", "Você voltou do portal de cobrança do Stripe.");
+    else toast("info", "Checkout cancelado. Nenhuma cobrança foi feita.");
     params.delete("checkout");
     setParams(params, { replace: true });
   }, [params, setParams, toast]);
@@ -51,6 +56,17 @@ export function Plano() {
       return;
     }
     toast("error", (data as { error?: string } | null)?.error ?? (httpStatus === 503 ? "Pagamentos não configurados neste ambiente." : "Não foi possível abrir o checkout."));
+  }
+
+  async function gerenciarAssinatura() {
+    setAbrindoPortal(true);
+    const { ok, data } = await api<{ url?: string; error?: string }>("/api/plano/portal", { method: "POST", body: {} });
+    setAbrindoPortal(false);
+    if (ok && data?.url) {
+      window.location.href = data.url;
+      return;
+    }
+    toast("error", (data as { error?: string } | null)?.error ?? "Não foi possível abrir o portal agora.");
   }
 
   const ehPro = Boolean(usuario?.premium);
@@ -90,6 +106,11 @@ export function Plano() {
           {!ehPro && (
             <Button size="lg" onClick={assinar} disabled={redirecionando}>
               <CreditCard size={18} /> {redirecionando ? "Abrindo checkout…" : `Assinar Pro — ${status.preco}`}
+            </Button>
+          )}
+          {ehPro && (
+            <Button size="lg" variant="outline" onClick={gerenciarAssinatura} disabled={abrindoPortal}>
+              <Settings size={18} /> {abrindoPortal ? "Abrindo portal…" : "Gerenciar assinatura"}
             </Button>
           )}
         </div>

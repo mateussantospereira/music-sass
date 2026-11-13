@@ -45,7 +45,9 @@ export type Permissao =
   /** Promover/rebaixar o papel de outro usuário. Exclusivo de admin. */
   | "alterar:papel"
   /** Consultar o stream de auditoria. Exclusivo de admin. */
-  | "consultar:logs";
+  | "consultar:logs"
+  /** Ver o panorama de faturamento: planos, assinaturas ativas e MRR. Exclusivo de admin. */
+  | "ver:faturamento";
 
 /**
  * O que cada papel pode fazer.
@@ -74,6 +76,7 @@ const POR_PAPEL: Record<Papel, readonly Permissao[]> = {
     "listar:usuarios",
     "alterar:papel",
     "consultar:logs",
+    "ver:faturamento",
   ],
 } as const;
 
