@@ -9,11 +9,7 @@ import { Spinner } from "../components/ui/spinner";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 
-const DEMO = [
-  { papel: "admin", email: "admin@riff.app", senha: "Admin@123" },
-  { papel: "curador", email: "curador@riff.app", senha: "Curador@123" },
-  { papel: "ouvinte", email: "ouvinte@riff.app", senha: "Ouvinte@123" },
-];
+const DEMO = [{ papel: "ouvinte", email: "ouvinte@riff.app", senha: "Ouvinte@123" }];
 
 export function Entrar({ modoInicial = "login" }: { modoInicial?: "login" | "cadastro" }) {
   const [modo, setModo] = React.useState<"login" | "cadastro">(modoInicial);

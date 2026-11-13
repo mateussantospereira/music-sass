@@ -1,5 +1,6 @@
 import * as React from "react";
-import { urlComToken } from "./api";
+import { urlComToken, obterToken } from "./api";
+import { getCachedAudioUrl, cacheAudio, pruneAudioCache } from "./audioCache";
 
 export type Faixa = {
   id: number;
@@ -50,13 +51,60 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audioRef.current.preload = "auto";
   }
 
-  const carregarETocar = React.useCallback((faixa: Faixa) => {
+  const ultimaUrlLocal = React.useRef<string | null>(null);
+
+  const tocarSrc = React.useCallback((src: string) => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.src = urlComToken(`/api/musicas/${faixa.id}/stream`);
+    audio.src = src;
     setProgresso(0);
     setDuracao(0);
     audio.play().then(() => setTocando(true)).catch(() => setTocando(false));
+  }, []);
+
+  const carregarETocar = React.useCallback((faixa: Faixa) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // Libera o object URL anterior (cache local) para não vazar memória.
+    if (ultimaUrlLocal.current) {
+      URL.revokeObjectURL(ultimaUrlLocal.current);
+      ultimaUrlLocal.current = null;
+    }
+
+    // 1) Cache do navegador: toca sem ir ao servidor (como no YouTube).
+    getCachedAudioUrl(faixa.id).then((local) => {
+      if (local) {
+        ultimaUrlLocal.current = local;
+        tocarSrc(local);
+        return;
+      }
+
+      // 2) Sem cache válido (ou primeiro toque): busca com autenticação,
+      //    guarda no cache e reproduz.
+      const token = obterToken();
+      fetch(`/api/musicas/${faixa.id}/stream`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((resposta) => {
+          if (!resposta.ok) throw new Error("stream indisponível");
+          return resposta.blob().then((blob) => ({ blob, contentType: resposta.headers.get("content-type") }));
+        })
+        .then(({ blob, contentType }) => {
+          cacheAudio(faixa.id, blob, contentType);
+          ultimaUrlLocal.current = URL.createObjectURL(blob);
+          tocarSrc(ultimaUrlLocal.current);
+        })
+        .catch(() => {
+          // Fallback: tag <audio> com token na query (sem cache).
+          tocarSrc(urlComToken(`/api/musicas/${faixa.id}/stream`));
+        });
+    });
+  }, [tocarSrc]);
+
+  // Limpeza automática do cache na abertura do player.
+  React.useEffect(() => {
+    pruneAudioCache();
   }, []);
 
   const playFaixas = React.useCallback((faixas: Faixa[], indice: number) => {

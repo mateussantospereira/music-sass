@@ -94,7 +94,7 @@ export function Biblioteca() {
           <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">Suas músicas</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {usuario?.role === "ouvinte"
-              ? "Aqui aparece tudo o que compartilharam com você."
+              ? "Suas faixas e as que compartilharem com você."
               : usuario?.role === "admin"
                 ? "Como admin, você vê a biblioteca de todo mundo."
                 : "Só as faixas que você curou — mais o que compartilharem com você."}

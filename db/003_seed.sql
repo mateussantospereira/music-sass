@@ -61,6 +61,15 @@ WHERE NOT EXISTS (
   SELECT 1 FROM `musicas` WHERE `usuario_id` = @admin_id AND `titulo` = 'Arquivo do Administrador (demo)'
 );
 
+-- Faixa própria do ouvinte (usuário comum do produto).
+INSERT INTO `musicas`
+  (`usuario_id`, `titulo`, `artista`, `origem_url`, `duracao_seg`, `status`, `chave_audio`, `chave_capa`, `content_type`, `tamanho`)
+SELECT @ouvinte_id, 'Ritmo do Ouvinte (demo)', 'Riff Demo', 'https://www.youtube.com/watch?v=demo-ouvinte',
+       4, 'pronta', 'demo/ouvinte-ritmo.wav', NULL, 'audio/wav', 176444
+WHERE NOT EXISTS (
+  SELECT 1 FROM `musicas` WHERE `usuario_id` = @ouvinte_id AND `titulo` = 'Ritmo do Ouvinte (demo)'
+);
+
 -- Playlist do curador com as duas músicas dele.
 INSERT INTO `playlists` (`usuario_id`, `nome`, `descricao`)
 SELECT @curador_id, 'Estudo e Concentração', 'Faixas para foco profundo durante o trabalho.'

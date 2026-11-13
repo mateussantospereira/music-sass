@@ -20,7 +20,7 @@ type Detalhe = Musica & { compartilhamentos?: Share[] };
 export function MusicaDetalhe() {
   const { id } = useParams<{ id: string }>();
   const musicaId = Number(id);
-  const { usuario } = useAuth();
+  const { usuario, temPermissao } = useAuth();
   const { atual, tocando, tocar, alternar } = usePlayer();
   const toast = useToast();
   const navigate = useNavigate();
@@ -50,6 +50,7 @@ export function MusicaDetalhe() {
   }, [carregar]);
 
   const podeEditar = Boolean(dados && (usuario?.role === "admin" || dados.usuarioId === usuario?.usuarioId));
+  const podeCompartilhar = podeEditar && temPermissao("compartilhar:musica");
   const isAtual = dados && atual?.id === dados.id;
   const tocavel = dados?.status === "pronta" && dados?.temAudio;
 
@@ -131,7 +132,9 @@ export function MusicaDetalhe() {
             {podeEditar && (
               <>
                 <Button variant="ghost" size="icon" title="Editar metadados" onClick={() => { setTitulo(dados.titulo); setArtista(dados.artista ?? ""); setEditando(true); }}><Pencil size={18} /></Button>
-                <Button variant="ghost" size="icon" title="Compartilhar" onClick={() => setCompartilhando(true)}><Share2 size={18} /></Button>
+                {podeCompartilhar && (
+                  <Button variant="ghost" size="icon" title="Compartilhar" onClick={() => setCompartilhando(true)}><Share2 size={18} /></Button>
+                )}
                 <Button variant="ghost" size="icon" title="Remover" className="text-destructive hover:text-destructive" onClick={() => setApagando(true)}><Trash2 size={18} /></Button>
               </>
             )}

@@ -55,7 +55,7 @@ O Riff resolve isso com quatro ideias simples:
    extração (`processando`, `pronta`, `erro`), áudio e capa no MinIO.
 2. **Papéis de negócio reais:** `admin`, `curador` e `ouvinte`, aplicados no
    servidor — esconder um botão na tela não é segurança.
-3. **Compartilhamento explícito:** o ouvinte só enxerga o que o curador liberou
+3. **Compartilhamento explícito:** cada faixa e cada playlist são liberadas para quem o dono escolher
    — música a música ou playlist inteira (`compartilhamentos`).
 4. **Auditoria de negócio:** adição, extração concluída/falha, edição,
    remoção, reprodução, compartilhamento e tentativas negadas viram
@@ -119,9 +119,9 @@ da regra no frontend nem nas rotas.
 | Permissão | `admin` | `curador` | `ouvinte` |
 | --- | :---: | :---: | :---: |
 | `ler:musica` | ✅ | ✅ (+ compartilhadas com ele) | ✅ (só compartilhadas com ele) |
-| `criar:musica` | ✅ | ✅ | — |
-| `editar:musica` | ✅ | ✅ (próprias) | — |
-| `apagar:musica` | ✅ | ✅ (próprias) | — |
+| `criar:musica` | ✅ | ✅ | ✅ (próprias) |
+| `editar:musica` | ✅ | ✅ (próprias) | ✅ (próprias) |
+| `apagar:musica` | ✅ | ✅ (próprias) | ✅ (próprias) |
 | `gerenciar:playlist` | ✅ | ✅ (próprias) | ✅ (próprias) |
 | `compartilhar:musica` | ✅ | ✅ (suas) | — |
 | `listar:usuarios` | ✅ | — | — |
@@ -130,8 +130,10 @@ da regra no frontend nem nas rotas.
 
 - Todo cadastro novo nasce como **`curador`**. Virar `ouvinte` ou `admin`
   é uma decisão administrativa (`PATCH /api/usuarios/:id/role`).
-- O **ouvinte** não cria nem edita músicas: ele consome o que foi liberado
-  para ele e monta playlists a partir do que tem acesso.
+- O **ouvinte** é o usuário comum do produto: cole o link, processe o áudio e
+  veja **somente a própria biblioteca** (adicionar, ouvir, buscar e remover).
+  Ele também enxerga o que compartilharem com ele. Ele **não compartilha**
+  com terceiros.
 - O servidor responde **403** quando a permissão falta, mesmo que a chamada
   venha direto para a API, sem passar pela interface.
 
@@ -143,13 +145,11 @@ TOKEN=$(curl -s -X POST https://mateus-pereira-isw055.lapps.studio/api/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"ouvinte@riff.app","senha":"Ouvinte@123"}' | jq -r .token)
 
-# tentar adicionar música (ouvinte não tem criar:musica)
-curl -i -X POST https://mateus-pereira-isw055.lapps.studio/api/musicas \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+# tentar consultar a auditoria (só admin tem consultar:logs)
+curl -i -H "Authorization: Bearer $TOKEN" \
+  "https://mateus-pereira-isw055.lapps.studio/api/logs?limite=1"
 # HTTP/2 403
-# {"error":"Ação negada: o seu papel (ouvinte) não tem a permissão \"criar:musica\".", ...}
+# {"error":"Ação negada: o seu papel (ouvinte) não tem a permissão \"consultar:logs\".", ...}
 ```
 
 ---
@@ -245,7 +245,7 @@ async function podeLer(musica, usuarioId, role) {
 
 - `admin` vê tudo.
 - `curador` vê as próprias faixas + as que compartilharem com ele.
-- `ouvinte` vê apenas o que foi compartilhado com ele.
+- `ouvinte` vê a própria biblioteca e o que compartilharem com ele.
 - Qualquer outro caso: **403**, mesmo com o ID correto na mão. O mesmo ID que
   aparece em `/api/musicas/123` devolve 403 para quem não é dono nem ouvinte
   liberado, e 404 quando o recurso não existe.
@@ -291,6 +291,24 @@ O admin consulta os últimos eventos em **Painel → Auditoria** ou por
 - O MariaDB guarda **somente as chaves** em `musicas`; o binário não entra no banco.
 - O navegador nunca fala com o MinIO: a leitura passa por rotas
   autenticadas que conferem dono ou compartilhamento antes de devolver os bytes.
+
+### Cache de áudio no navegador
+
+Como no YouTube, depois de reproduzida a faixa fica em **cache no navegador do
+cliente** (Cache Storage, chave `riff-audio-v1`, servindo os bytes sem nova
+leitura autenticada do servidor):
+
+- **Validade de 7 dias** desde a reprodução;
+- **80 MB no total**, descartando as mais antigas primeiro (LRU);
+- o cache é **limpo automaticamente** ao abrir o app e sempre que estoura o
+  limite;
+- ou manualmente pelo botão **“Limpar cache de áudio”** na barra superior.
+
+Nada é salvo como arquivo na máquina: o áudio vive no cache do navegador e
+sai de lá sozinho. O servidor continua autenticando e autorizando o stream —
+o cache apenas evita repetir a leitura nas próximas vezes.
+
+---
 
 ## Extração de áudio
 
@@ -448,12 +466,13 @@ bun run db:seed
 | --- | --- | --- | --- |
 | `admin` | `admin@riff.app` | `Admin@123` | Vê tudo, gerencia usuários e auditoria, plano Pro. |
 | `curador` | `curador@riff.app` | `Curador@123` | Cria músicas, playlists e compartilhamentos. |
-| `ouvinte` | `ouvinte@riff.app` | `Ouvinte@123` | Só ouve/baixa o que foi liberado para ele. |
+| `ouvinte` | `ouvinte@riff.app` | `Ouvinte@123` | Usuário comum: cola o link, processa e vê só a própria biblioteca. |
 
 O seed também cria:
 
 - 2 músicas demo do `curador` (arquivos em `seed-audio/`, enviados ao MinIO como `demo/*.wav`);
 - 1 música demo do `admin` (o `curador` recebe 403 ao abrir pelo ID);
+- 1 música demo do `ouvinte` (a própria biblioteca dele);
 - a playlist **"Estudo e Concentração"** com 2 faixas;
 - compartilhamento da playlist **e** de uma faixa avulsa com o ouvinte.
 
@@ -536,6 +555,9 @@ repositório e o banco deixar de ter as tabelas antigas.
   o app decide o que o plano gratuito pode fazer (`LIMITE_MUSICAS_GRATIS`).
 - **MinIO é interno.** O binário nunca é servido diretamente ao navegador; a
   rota de leitura confere o dono ou o compartilhamento antes de devolver os bytes.
+- **Cache local com limite e expiração.** Igual ao YouTube: a faixa fica em
+  cache no navegador por até 7 dias / 80 MB (LRU), é limpa sozinha e pode ser
+  apagada pelo botão “Limpar cache de áudio”.
 - **Falha de serviço de apoio não derruba o produto.** Se o `auth-service`
   cair, o app responde 503 nas rotas autenticadas e continua servindo a landing.
   Se o MinIO cair, os uploads respondem 503 e o CRUD continua.

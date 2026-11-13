@@ -10,8 +10,10 @@
  *
  *   curador -> adiciona músicas por URL do YouTube, organiza a
  *              própria biblioteca, cria playlists e compartilha com ouvintes
- *   ouvinte -> só enxerga o que foi compartilhado com ele; ouve e baixa,
- *              e pode montar playlists a partir do que tem acesso
+ *   ouvinte -> usuário comum do produto: cola o link, processa o áudio e vê
+ *              SOMENTE a própria biblioteca (adicionar, ouvir, buscar e
+ *              remover). Também vê o que compartilharem com ele.
+ *              NÃO compartilha com terceiros.
  *   admin   -> administra o SaaS inteiro (usuários, papéis, logs e músicas)
  *
  * Um papel desconhecido no banco NUNCA vira admin: cai para o menor privilégio
@@ -61,7 +63,7 @@ const POR_PAPEL: Record<Papel, readonly Permissao[]> = {
     "gerenciar:playlist",
     "compartilhar:musica",
   ],
-  ouvinte: ["ler:musica", "gerenciar:playlist"],
+  ouvinte: ["ler:musica", "criar:musica", "editar:musica", "apagar:musica", "gerenciar:playlist"],
   admin: [
     "ler:musica",
     "criar:musica",
@@ -88,7 +90,7 @@ export function papelValido(role: unknown): Papel | null {
  * Converte um papel guardado no banco na lista de permissões dele.
  *
  * FALHA PARA O MENOR PRIVILÉGIO: papel desconhecido ou corrompido vira
- * `ouvinte` (leitura do que lhe é compartilhado), nunca `admin`.
+ * `ouvinte`, nunca `admin`.
  */
 export function permissoesDe(role: unknown): Permissao[] {
   const papel = papelValido(role) ?? PAPEL_PADRAO;

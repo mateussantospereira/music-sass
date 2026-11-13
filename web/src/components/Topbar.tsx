@@ -1,8 +1,10 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LogOut, ShieldCheck, ListMusic, Library, PlusCircle, Sparkles, Users, ScrollText } from "lucide-react";
+import { LogOut, ShieldCheck, ListMusic, Library, PlusCircle, Sparkles, Users, ScrollText, Eraser } from "lucide-react";
 import { Logo } from "./LogoMark";
 import { useAuth } from "../lib/auth";
 import { usePlayer } from "../lib/player";
+import { useToast } from "./ui/toast";
+import { clearAudioCache } from "../lib/audioCache";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/cn";
@@ -19,6 +21,7 @@ const LINKS = [
 export function Topbar() {
   const { usuario, sair, temPermissao } = useAuth();
   const { atual } = usePlayer();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const links = LINKS.filter((l) => !l.perm || temPermissao(l.perm));
@@ -57,6 +60,18 @@ export function Topbar() {
               {usuario?.role}
             </p>
           </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Limpar cache de áudio"
+            title="Limpar cache de áudio"
+            onClick={async () => {
+              await clearAudioCache();
+              toast("ok", "Cache de áudio limpo.");
+            }}
+          >
+            <Eraser size={18} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

@@ -14,7 +14,7 @@ const RECURSOS = [
   { icone: Library, titulo: "Sua biblioteca, seu controle", texto: "Cada curador enxerga a própria biblioteca. O que é compartilhado aparece só para quem foi liberado — o resto é 403." },
   { icone: ListMusic, titulo: "Playlists que fazem sentido", texto: "Monte listas, ordene as faixas e aperte play. O player continua na tela enquanto você navega." },
   { icone: Headphones, titulo: "Feito para ouvir", texto: "Stream direto no navegador, sem arquivos soltos pela máquina: a faixa toca onde você estiver." },
-  { icone: Users, titulo: "Curador e ouvinte", texto: "Papéis reais no backend: curador publica, ouvinte consome o que foi liberado, admin administra. Sem botão fingindo ser segurança." },
+  { icone: Users, titulo: "Curador e ouvinte", texto: "Papéis reais no backend: ouvinte gerencia a própria biblioteca, curador compartilha com ouvintes, admin administra. Sem botão fingindo ser segurança." },
   { icone: ShieldCheck, titulo: "Auditoria de verdade", texto: "Toda ação vira evento no log: quem adicionou, quem compartilhou, quem baixou — com data, hora e IP." },
 ];
 
@@ -27,7 +27,7 @@ const PASSOS = [
 const FAQ = [
   { p: "Precisa de cartão para começar?", r: "Não. O plano gratuito inclui até 10 músicas, playlists e compartilhamento. O Pro remove o limite." },
   { p: "Funciona com qualquer link do YouTube?", r: "Sim: watch, Shorts e youtu.be. A extração fica no servidor; você recebe o áudio pronto." },
-  { p: "Meu ouvinte vê as músicas de todo mundo?", r: "Não. Ouvinte só enxerga o que foi compartilhado com ele — e o ID de outra pessoa responde 403 na API." },
+  { p: "Meu ouvinte vê as músicas de todo mundo?", r: "Não. Ele vê a própria biblioteca e o que compartilharem com ele — o ID de outra pessoa responde 403 na API." },
 ];
 
 export function Landing() {

@@ -2,6 +2,7 @@ import { Music2, Pause, Pencil, Play, Share2, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { usePlayer } from "../lib/player";
+import { useAuth } from "../lib/auth";
 import { urlComToken } from "../lib/api";
 import { formatarBytes, formatarDuracao, rotuloStatus, statusBadgeVariant } from "../lib/format";
 import type { Musica } from "../lib/tipos";
@@ -17,6 +18,8 @@ type Props = {
 
 export function MusicaLinha({ musica, podeEditar, mostrarDono, onEditar, onApagar, onCompartilhar }: Props) {
   const { atual, tocando, tocar, alternar } = usePlayer();
+  const { temPermissao } = useAuth();
+  const podeCompartilhar = podeEditar && temPermissao("compartilhar:musica");
   const tocavel = musica.status === "pronta" && musica.temAudio;
   const isAtual = atual?.id === musica.id;
 
@@ -59,7 +62,9 @@ export function MusicaLinha({ musica, podeEditar, mostrarDono, onEditar, onApaga
         {podeEditar && (
           <>
             <Button variant="ghost" size="icon" title="Editar" aria-label="Editar" onClick={() => onEditar?.(musica)}><Pencil size={17} /></Button>
-            <Button variant="ghost" size="icon" title="Compartilhar" aria-label="Compartilhar" onClick={() => onCompartilhar?.(musica)}><Share2 size={17} /></Button>
+            {podeCompartilhar && (
+              <Button variant="ghost" size="icon" title="Compartilhar" aria-label="Compartilhar" onClick={() => onCompartilhar?.(musica)}><Share2 size={17} /></Button>
+            )}
             <Button variant="ghost" size="icon" title="Remover" aria-label="Remover" className="text-destructive hover:text-destructive" onClick={() => onApagar?.(musica)}><Trash2 size={17} /></Button>
           </>
         )}

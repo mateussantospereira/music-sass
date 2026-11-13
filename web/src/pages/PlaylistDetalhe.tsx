@@ -21,7 +21,7 @@ import type { Musica, PlaylistDetalhe as TPlaylistDetalhe, Share } from "../lib/
 export function PlaylistDetalhe() {
   const { id } = useParams<{ id: string }>();
   const playlistId = Number(id);
-  const { usuario } = useAuth();
+  const { usuario, temPermissao } = useAuth();
   const { playFaixas, atual, tocando, alternar } = usePlayer();
   const toast = useToast();
   const navigate = useNavigate();
@@ -48,6 +48,7 @@ export function PlaylistDetalhe() {
   React.useEffect(() => { carregar(); }, [carregar]);
 
   const podeEditar = Boolean(dados && (usuario?.role === "admin" || dados.usuarioId === usuario?.usuarioId));
+  const podeCompartilhar = podeEditar && temPermissao("compartilhar:musica");
   const tocaveis = (dados?.musicas ?? []).filter((f) => f.status === "pronta" && f.temAudio);
   const isTocandoEsta = atual && (dados?.musicas ?? []).some((f) => f.id === atual.id);
 
@@ -131,7 +132,9 @@ export function PlaylistDetalhe() {
             <>
               <Button variant="outline" size="icon" title="Adicionar faixas" onClick={abrirAdicionar}><Plus size={18} /></Button>
               <Button variant="ghost" size="icon" title="Editar" onClick={() => { setNome(dados.nome); setDescricao(dados.descricao ?? ""); setEditando(true); }}><Pencil size={17} /></Button>
-              <Button variant="ghost" size="icon" title="Compartilhar" onClick={() => setCompartilhando(true)}><Share2 size={17} /></Button>
+              {podeCompartilhar && (
+                <Button variant="ghost" size="icon" title="Compartilhar" onClick={() => setCompartilhando(true)}><Share2 size={17} /></Button>
+              )}
               <Button variant="ghost" size="icon" title="Remover playlist" className="text-destructive hover:text-destructive" onClick={() => setApagando(true)}><Trash2 size={17} /></Button>
             </>
           )}
