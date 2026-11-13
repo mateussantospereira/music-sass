@@ -107,6 +107,28 @@ Pontos importantes:
   `auth-service`; `musicas`, `playlists`, `playlist_musicas`,
   `compartilhamentos` e `assinaturas` pertencem ao `app`.
 
+## Atividade 11 — evidências (prints)
+
+1. `08-limite-free-bloqueado.png` — conta nova no Free com 10/10 músicas;
+   a criação da 11ª responde `402` (o limite vale na API, não na tela).
+2. `09-checkout-stripe-teste.png` — checkout do Stripe em modo de teste, página hospedada.
+3. `10-checkout-cartao-4242.png` — cartão `4242 4242 4242 4242` preenchido no checkout.
+4. `11-assinatura-concluida.png` — após o checkout, o app volta para o Plano; o Pro
+   aparece ativado **porque o webhook processou** `checkout.session.completed`.
+5. `12-painel-faturamento-admin.png` — `/painel/faturamento` (admin): usuários por
+   plano, assinaturas ativas/canceladas, MRR e últimos eventos do log.
+6. `13-auditoria-assinatura.png` — auditoria: `checkout_pro_iniciado`,
+   `assinatura_pro_ativada` (nome do ator/estrutura no log-service).
+7. `14-portal-cliente-stripe.png` — Billing Portal: assinatura atual, cartão
+   `•••• 4242`, histórico da fatura `Riff Pro · R$ 29,00 · Paga`.
+8. `15-portal-cancelar-confirmacao.png` — confirmação de cancelamento no portal.
+9. `16-conta-volta-para-free.png` — após o webhook `customer.subscription.deleted`,
+   o plano volta a ser `Gratuito` com 10/10 músicas usadas — o Pro acabou quando o
+   webhook chegou.
+
+> Para reproduzir tudo em qualquer conta: ver a seção
+> [Plano gratuito e plano Pro](#plano-gratuito-e-plano-pro-assinatura-recorrente).
+
 ---
 
 ## Papéis e permissões
@@ -388,6 +410,14 @@ No painel do Stripe (test mode):
    Copie o *Signing secret* (vai para `STRIPE_WEBHOOK_SECRET`).
 4. **Settings → Billing → Customer portal** → salve a configuração do portal
    (o link volta para `/painel/plano`).
+5. **Nesta entrega**, já foi criado em modo de teste:
+   - produto **Riff Pro** (`prod_VciOtGqkiL0zGz`) com o preço recorrente
+     **R$ 29,00/mês (BRL)** (`price_1UbSxTFuyPkL92kDs4jPTOzE`);
+   - endpoint de webhook `we_1UbSxXFuyPkL92kD6YUGBQ3h` apontando para
+     `https://mateus-pereira-isw055.lapps.studio/api/plano/webhook` com os 4
+     eventos (status `enabled`); o signing secret ficou no Portainer;
+   - configuração do **Billing Portal** em modo de teste, com cancelamento
+     imediato (cobrança `R$ 29,00/mês`, cartão de teste `4242 4242 4242 4242`).
 5. As chaves ficam **somente nas variáveis da stack no Portainer** — nunca no
    repositório. O `.env.example` lista apenas os nomes.
 
