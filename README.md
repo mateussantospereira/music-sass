@@ -35,6 +35,7 @@ comercial gratuito/Pro.
 - [Deploy](#deploy)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Decisões de projeto](#decisões-de-projeto)
+- [Relatório P2](#relatório-p2)
 
 ---
 
@@ -110,22 +111,22 @@ Pontos importantes:
 ## Atividade 11 — evidências (prints)
 
 1. `08-limite-free-bloqueado.png` — conta nova no Free com 10/10 músicas;
-   a criação da 11ª responde `402` (o limite vale na API, não na tela).
-2. `09-checkout-stripe-teste.png` — checkout do Stripe em modo de teste, página hospedada.
-3. `10-checkout-cartao-4242.png` — cartão `4242 4242 4242 4242` preenchido no checkout.
-4. `11-assinatura-concluida.png` — após o checkout, o app volta para o Plano; o Pro
-   aparece ativado **porque o webhook processou** `checkout.session.completed`.
-5. `12-painel-faturamento-admin.png` — `/painel/faturamento` (admin): usuários por
-   plano, assinaturas ativas/canceladas, MRR e últimos eventos do log.
-6. `13-auditoria-assinatura.png` — auditoria: `checkout_pro_iniciado`,
-   `assinatura_pro_ativada` (nome do ator/estrutura no log-service).
-7. `14-portal-cliente-stripe.png` — Billing Portal: assinatura atual, cartão
+   o plano Gratuito aparece cheio na tela.
+2. `08-limite-free-402.png` — evidência da API: a chamada autenticada da 11ª
+   música responde `402` (o limite vale na API, não na tela).
+3. `09-checkout-stripe-teste.png` — checkout do Stripe em modo de teste (página hospedada).
+4. `10-checkout-cartao-4242.png` — cartão `4242 4242 4242 4242` preenchido no checkout.
+5. `11-assinatura-concluida.png` — após o checkout, o app mostra o Pro ativado porque o
+   webhook processou `checkout.session.completed`.
+6. `12-painel-faturamento-admin.png` — `/painel/faturamento` (admin): usuários por plano,
+   assinaturas ativas/canceladas, MRR e últimos eventos do log.
+7. `13-assinatura-eventos-live.png` — recorte live da API de logs (assinaturas).
+8. `14-portal-cliente-stripe.png` — Billing Portal: assinatura atual, cartão
    `•••• 4242`, histórico da fatura `Riff Pro · R$ 29,00 · Paga`.
-8. `15-portal-cancelar-confirmacao.png` — confirmação de cancelamento no portal.
-9. `16-conta-volta-para-free.png` — após o webhook `customer.subscription.deleted`,
-   o plano volta a ser `Gratuito` com 10/10 músicas usadas — o Pro acabou quando o
-   webhook chegou.
-10. `17-webhook-idempotente.png` — reenvio do mesmo `checkout.session.completed`
+9. `15-portal-cancelar-confirmacao.png` — confirmação de cancelamento no portal.
+10. `16-conta-volta-para-free.png` — após o webhook `customer.subscription.deleted`,
+    o plano volta a ser `Gratuito` com 10/10 músicas usadas.
+11. `17-webhook-idempotente.png` — reenvio do mesmo `checkout.session.completed`
     (assinatura nova e válida) responde `200 { duplicado: true }` sem efeito duplicado.
 
 > Para reproduzir tudo em qualquer conta: ver a seção
@@ -673,3 +674,16 @@ repositório e o banco deixar de ter as tabelas antigas.
 
 Feito com Bun, Hono, React, Tailwind, Drizzle, MariaDB, Redis Streams, MinIO,
 Docker e Portainer.
+
+---
+
+## Relatório P2
+
+Relatório consolidado do bimestre — arquitetura do SaaS e quadro de atividades
+7 a 11 com as datas planejada/realizada e as evidências (prints, commits,
+issues):
+
+**[docs/P2_ISW055_Mateus_dos_Santos_Pereira.pdf](docs/P2_ISW055_Mateus_dos_Santos_Pereira.pdf)**
+
+Fonte em Typst: [docs/P2_ISW055_Mateus_dos_Santos_Pereira.typ](docs/P2_ISW055_Mateus_dos_Santos_Pereira.typ)
+(`typst compile` no diretório `docs/`, com os prints em `docs/prints/`).
